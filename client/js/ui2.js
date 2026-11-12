@@ -1,6 +1,6 @@
 // ===== UI v2: icon-driven panels (no text dropdowns), RO-style inventory, PoE-style passive tree, illustrated world map =====
 import { CLASS_BY_ID } from '/shared/classes.js';
-import { classSkills, getSkill, resolveSkill, MAX_SKILL_RANK, runeSlotsForRank, FAMILIES } from '/shared/skills.js';
+import { classSkills, getSkill, resolveSkill, MAX_SKILL_RANK, runeSlotsForRank, FAMILIES, classDisciplines, TRAITS, MOD_TH } from '/shared/skills.js';
 import { RUNES, RUNE_BY_ID, runeFits } from '/shared/runes.js';
 import { buildPassiveTree, passivePointsFor, spentPoints } from '/shared/passives.js';
 import { STAT_TH, SLOT_TH, SETS, MATERIALS, WEAPON_TYPES, POTIONS } from '/shared/items.js';
@@ -83,8 +83,8 @@ export function installUI2(UI) {
   // ---------- Skills: tabs by mechanic family with icons; rune picker with rune icons ----------
   P.p_skills = function () {
     const c = this.G.char; const cls = CLASS_BY_ID[c.classId]; const all = classSkills(c.classId);
-    const fams = Object.keys(FAMILIES).filter((f) => all.some((s) => s.school === f));
-    const tabs = [...fams.map((f) => [f, FAMILIES[f].icon, FAMILIES[f].th, all.filter((s) => s.school === f).length]), ['ultimate', '🌟', 'Ultimate', 10]];
+    const tabs = [...classDisciplines(c.classId).map((d) => [d.id, d.icon, d.title, all.filter((s) => s.school === d.id).length]), ['ultimate', '🌟', 'Ultimate', 10]];
+    const trait = TRAITS[c.classId];
     const tab = this.ctx.skFam && tabs.some((t) => t[0] === this.ctx.skFam) ? this.ctx.skFam : tabs[0][0];
     const list = tab === 'ultimate' ? all.filter((s) => s.kind === 'ultimate') : all.filter((s) => s.school === tab);
     const spent = Object.values(c.skillRanks).reduce((a, r) => a + r - 1, 0), total = c.level - 1 + c.mastery;
@@ -97,8 +97,9 @@ export function installUI2(UI) {
       const usage = {}; for (const l of Object.values(c.build.runes)) for (const r of l) if (r) usage[r] = (usage[r] || 0) + 1;
       const owned = RUNES.filter((r) => (c.runes[r.id] || 0) > 0 && runeFits(r, sel.behavior));
       const stats = [['📈', 'Rank', `${rank}/${MAX_SKILL_RANK}`], ['💥', 'ดาเมจ', spec.dmg ? Math.round(spec.dmg) + '%' : '-'], ['⏱', 'คูลดาวน์', spec.cd.toFixed(1) + 'วิ'], ['💧', cls.resource.name, Math.round(spec.cost)], spec.radius ? ['◎', 'รัศมี', Math.round(spec.radius)] : null, spec.range ? ['📏', 'ระยะ', Math.round(spec.range)] : null, spec.multiHit > 1 ? ['✖', 'จำนวนครั้ง', spec.multiHit] : null, spec.count > 1 ? ['🔢', 'จำนวน', spec.count] : null, spec.chain ? ['🔗', 'กระโดด', spec.chain] : null, spec.heal ? ['❤', 'ฮีล', Math.round(spec.heal) + '%'] : null].filter(Boolean);
-      detail = `<div class="sk-head">${this.skIcon(sel, 1)}<div><h3>${esc(sel.name)}</h3><div class="tags"><span class="tag2">${sel.kind === 'ultimate' ? '🌟 ULTIMATE' : (FAMILIES[sel.school]?.icon || '') + ' ' + (FAMILIES[sel.school]?.th || '')}</span><span class="tag2" style="color:${ELEMENT_INFO[spec.el].color}">● ${ELEMENT_INFO[spec.el].th}</span><span class="tag2">🔓 Lv ${sel.unlock}</span></div></div></div>
-        <p class="sk-desc">${esc(sel.desc)}</p>
+      detail = `<div class="sk-head">${this.skIcon(sel, 1)}<div><h3>${esc(sel.name)}</h3><div class="tags"><span class="tag2">${sel.kind === 'ultimate' ? '🌟 ULTIMATE' : (tabs.find((t) => t[0] === sel.school) || ['', '', ''])[1] + ' ' + (tabs.find((t) => t[0] === sel.school) || ['', '', ''])[2]}</span><span class="tag2" style="color:${ELEMENT_INFO[spec.el].color}">● ${ELEMENT_INFO[spec.el].th}</span><span class="tag2">🔓 Lv ${sel.unlock}</span></div></div></div>
+        <p class="sk-desc">${esc(sel.desc)}</p>${(sel.mods || []).length ? `<div class="tags">${sel.mods.map((m) => `<span class="tag2">✦ ${esc(MOD_TH[m] || m)}</span>`).join('')}</div>` : ''}
+        <p class="dim">⭐ ลักษณะเฉพาะคลาส: <b>${esc(trait.name)}</b> — ${esc(trait.th)}</p>
         <div class="stat-tiles">${stats.map(([i, a, b]) => `<div><i>${i}</i><span>${a}</span><b>${b}</b></div>`).join('')}</div>
         ${locked ? `<p class="err">🔒 ต้องการเลเวล ${sel.unlock}</p>` : `${sel.kind === 'ultimate' ? `<div class="row"><button data-act="equipSkill" data-slot="u" data-id="${sel.id}">${c.build.ult === sel.id ? '✔ ใส่อยู่ช่อง R' : '⬇ ใส่ช่องอัลติเมท [R]'}</button>` : `<h4>⬇ ใส่ลง Hotbar <small class="dim">คลิกช่อง • หรือลากจากรายการ</small></h4>
         <div class="slotpick">${Array.from({ length: HOTBAR_SIZE }, (_, i) => { const id = c.build.hotbar[i]; const s2 = id && getSkill(id); return `<div class="${id === sel.id ? 'me' : id ? 'used' : ''}" data-act="equipSkill" data-slot="${i}" data-id="${sel.id}" title="${s2 ? esc(s2.name) : 'ว่าง'}">${s2 ? `<span class="mini-ic">${s2.icon || ''}</span>` : ''}<kbd>${this.slotName(i)}</kbd></div>`; }).join('')}</div>
@@ -109,7 +110,7 @@ export function installUI2(UI) {
         ${this.ctx.runeSlot != null && this.ctx.runeSlot < slots ? `<div class="rune-pick">${owned.map((o) => { const left = (c.runes[o.id] || 0) - (usage[o.id] || 0); return `<button class="pk" data-act="socketRune2" data-id="${sel.id}" data-idx="${this.ctx.runeSlot}" data-r="${o.id}" ${left <= 0 ? 'disabled' : ''} data-tip="rune:${o.id}">${img(runeIconURL(o.id, o.tier))}<span>${o.name}</span><small>${left}</small></button>`; }).join('') || '<span class="dim">ยังไม่มีรูนที่ใช้กับสกิลนี้ได้</span>'}</div>` : ''}
         ${spec.runes.length ? `<p class="dim">✔ รูนที่ทำงาน: ${spec.runes.map((r) => RUNE_BY_ID[r].th).join(' / ')}</p>` : ''}`}`;
     }
-    this.win('skills', `📘 สกิล [K] — แต้มสกิล ${total - spent}/${total}`, `<div class="icon-tabs">${tabs.map(([k, ic, lb, n]) => `<button class="${k === tab ? 'on' : ''}" data-act="skFam" data-f="${k}"><i>${ic}</i><span>${lb}</span><small>${n}</small></button>`).join('')}</div>
+    this.win('skills', `📘 สกิล [K] — แต้มสกิล ${total - spent}/${total}`, `<div class="trait-bar">⭐ <b>${esc(trait.name)}</b> <span>${esc(trait.th)}</span></div><div class="icon-tabs">${tabs.map(([k, ic, lb, n]) => `<button class="${k === tab ? 'on' : ''}" data-act="skFam" data-f="${k}"><i>${ic}</i><span>${lb}</span><small>${n}</small></button>`).join('')}</div>
       <div class="sk-wrap"><div class="sk-list">${list.map((s) => `<div class="sk-row ${s.id === this.selSkill ? 'sel' : ''} ${s.unlock > c.level ? 'locked' : ''}" data-act="selSkill" data-id="${s.id}" ${s.unlock <= c.level ? `draggable="true" data-drag-skill="${s.id}"` : ''}>${this.skIcon(s)}<div><b>${esc(s.name)}</b><small>${s.unlock > c.level ? '🔒' : '✔'} Lv${s.unlock} • R${c.skillRanks[s.id] || 1}${(c.build.runes[s.id] || []).filter(Boolean).length ? ' • 💠' + (c.build.runes[s.id] || []).filter(Boolean).length : ''}</small></div>${c.build.ult === s.id ? '<em>R</em>' : c.build.hotbar.includes(s.id) ? `<em>${this.slotName(c.build.hotbar.indexOf(s.id))}</em>` : ''}</div>`).join('')}</div><div class="sk-detail">${detail}</div></div>`, 860);
   };
   P.skIcon = function (s, big) { const col = ELEMENT_INFO[s.el].color; return `<div class="sk ${big ? 'big' : ''} ${s.kind === 'ultimate' ? 'u' : ''}" style="--c:${col}">${s.icon || '✦'}</div>`; };
@@ -240,7 +241,7 @@ export function installUI2(UI) {
     const W = Math.min(1100, window.innerWidth - 60), H = Math.min(680, window.innerHeight - 200);
     const el = this.win('passives', `🌳 Passive Skill Tree [P] — แต้มว่าง ${pts}`, `<div class="legend">${tree.branches.map((b) => `<span style="color:${b.color}">${b.icon} ${b.th}</span>`).join('')}</div><canvas id="treecv" width="${W}" height="${H}"></canvas><div class="row small dim"><span>🖱 ลากเพื่อเลื่อน • ล้อเมาส์ซูม • คลิกโหนดเพื่อลงแต้ม</span><span>• เล็ก = Minor</span><span>◉ Notable</span><span>◈ Keystone</span><button class="mini alt" data-act="treeCenter">🎯 กลับกลาง</button></div>`, W + 30);
     const cv = el.querySelector('#treecv');
-    if (this.treeCv !== cv) { this.treeCv = cv; this.treeView = this.treeView || { x: W / 2, y: H / 2, z: Math.min(W, H) / 1900 }; this.bindTree(cv, tree); }
+    if (this.treeCv !== cv) { this.treeCv = cv; this.treeView = this.treeView || { x: W / 2, y: H / 2, z: Math.min(W, H) / 3900 }; this.bindTree(cv, tree); }
   };
   P.nodeTip = function (n) { const a = this.G.char.build.passives[n.id] || 0; const t = { minor: 'Minor', notable: 'Notable', keystone: 'Keystone', root: 'Origin' }[n.type]; return `<b style="color:${n.color || '#fff'}">${n.icon || ''} ${esc(n.name === 'Minor' ? 'Passive' : n.name)}</b><br><small>${t} • ${a ? '✔ เปิดแล้ว' : 'ยังไม่เปิด'}</small><br>${esc(n.desc || '')}`; };
   P.drawTree = function () {
@@ -285,7 +286,7 @@ export function installUI2(UI) {
     }
     x.restore();
   };
-  UI.prototype.__treeCenter = function () { if (!this.treeCv) return; this.treeView = { x: this.treeCv.width / 2, y: this.treeCv.height / 2, z: Math.min(this.treeCv.width, this.treeCv.height) / 1900 }; };
+  UI.prototype.__treeCenter = function () { if (!this.treeCv) return; this.treeView = { x: this.treeCv.width / 2, y: this.treeCv.height / 2, z: Math.min(this.treeCv.width, this.treeCv.height) / 3900 }; };
 
   // ---------- Map: area tab (original) + illustrated world tab ----------
   P.p_map = function () {
@@ -463,7 +464,7 @@ export function installUI2(UI) {
     cv.addEventListener('mousemove', (e) => { if (drag) { const dx = e.clientX - drag.x, dy = e.clientY - drag.y; if (Math.abs(dx) + Math.abs(dy) > 4) drag.moved = true; this.treeView.x = drag.vx + dx; this.treeView.y = drag.vy + dy; } const n = hit(e); this.treeHover = n; if (n) this.showTip(this.nodeTip(n), e.clientX, e.clientY); else this.hideTip(); });
     cv.addEventListener('mouseup', (e) => { if (drag && !drag.moved) { const n = hit(e); if (n) this.send({ t: 'build', op: 'allocPassive', node: n.id }); } drag = null; });
     cv.addEventListener('mouseleave', () => { drag = null; this.hideTip(); });
-    cv.addEventListener('wheel', (e) => { e.preventDefault(); const v = this.treeView; const r = cv.getBoundingClientRect(); const mx = (e.clientX - r.left) * (cv.width / r.width), my = (e.clientY - r.top) * (cv.height / r.height); const z = Math.max(0.2, Math.min(2.2, v.z * (e.deltaY < 0 ? 1.12 : 0.89))); v.x = mx - ((mx - v.x) * z) / v.z; v.y = my - ((my - v.y) * z) / v.z; v.z = z; });
+    cv.addEventListener('wheel', (e) => { e.preventDefault(); const v = this.treeView; const r = cv.getBoundingClientRect(); const mx = (e.clientX - r.left) * (cv.width / r.width), my = (e.clientY - r.top) * (cv.height / r.height); const z = Math.max(0.12, Math.min(2.2, v.z * (e.deltaY < 0 ? 1.12 : 0.89))); v.x = mx - ((mx - v.x) * z) / v.z; v.y = my - ((my - v.y) * z) / v.z; v.z = z; });
   };
   P.onEnterExtra = function () { this.renderChatCh(); };
 }

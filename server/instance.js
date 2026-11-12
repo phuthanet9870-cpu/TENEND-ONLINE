@@ -85,7 +85,7 @@ export class Instance {
   }
   spawnBoss(bossId, lv, x, y, opt = {}) {
     const def = BOSSES[bossId];
-    const u = this.spawnMonster(bossId, lv, x, y, { mul: { hp: 14 * (opt.hpMul || 1), dmg: 1.0 * (opt.dmgMul || 1), armor: 1.3 }, name: opt.name || def.name });
+    const u = this.spawnMonster(bossId, lv, x, y, { mul: { hp: 20 * (opt.hpMul || 1), dmg: 1.0 * (opt.dmgMul || 1), armor: 1.3 }, name: opt.name || def.name });
     u.boss = true; u.bossDef = def; u.r = def.size; u.contrib = new Map(); u.world = !!opt.world; u.bossKind = opt.bossKind || 'field';
     u.bs = { phase: 0, idx: 0, next: this.time + 2, cur: null, speed: 1 };
     u.stats.move = 95; u.baseStats = u.stats;
@@ -424,6 +424,7 @@ export class Instance {
     if (tgt.volatile && !tgt.boss) this.area({ owner: tgt.id, team: tgt.team, x: tgt.x, y: tgt.y, shape: 'circle', r: 70, spec: { dmg: 120, el: 'fire', behavior: 'nova' }, mult: 1, delay: 0.6, show: true, ownerless: true });
     if (killer && killer.stats?.ks?.has('relentless')) for (const k in killer.cd) if (k.includes('step') || k.includes('dash')) killer.cd[k] = 0;
     if (killer && killer.stats?.leg?.has('bloodlust')) { healUnit(this, killer, killer.hpMax * 0.04, { silent: true }); }
+    if (killer && killer.classId === 'necromancer' && !killer.dead) { healUnit(this, killer, killer.hpMax * 0.03, { silent: true }); killer.mp = Math.min(killer.mpMax, killer.mp + killer.mpMax * 0.06); }
     if (tgt.kind === 'monster') { (this.corpses = this.corpses || []).push({ x: tgt.x, y: tgt.y, t: this.time }); if (this.corpses.length > 40) this.corpses.shift(); this.game.onMonsterKilled(this, tgt, killer); if (!this.mode?.keepCorpses) this.timer(1.2, () => this.units.delete(tgt.id)); }
     else if (tgt.kind === 'player' || tgt.kind === 'bot') this.game.onPlayerDeath(this, tgt, killer);
     else { if (tgt.kind === 'minion' && tgt.owner) { const o = this.units.get(tgt.owner); if (o?.stats?.ks?.has('soulbound')) healUnit(this, o, o.hpMax * 0.05); } this.units.delete(tgt.id); }

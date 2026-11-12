@@ -80,6 +80,14 @@ export function dealDamage(inst, src, tgt, spec, mult = 1, opt = {}) {
   if (ks.has('flow')) pct += 8 * Math.min(5, src.flowStacks || 0);
   if (ks.has('sniper')) pct += Math.min(50, Math.sqrt(dist2(src, tgt)) / 12);
   if (ks.has('overheat') && src.mp / src.mpMax < 0.3) pct += 35;
+  // class traits (every skill of the class carries them)
+  switch (owner.classId) {
+    case 'warrior': pct += 25 * (1 - owner.hp / owner.hpMax); break;
+    case 'ranger': pct += Math.min(25, Math.sqrt(dist2(owner, tgt)) / 24); break;
+    case 'arcanist': pct += 6 * Math.max(0, Math.min(4, (owner.elemChain || []).length - 1)); break;
+    case 'monk': { if (inst.time - (owner.comboT || -9) < 2) owner.combo = Math.min(10, (owner.combo || 0) + 1); else owner.combo = 0; owner.comboT = inst.time; pct += 3 * owner.combo; break; }
+  }
+  if ((src.kind === 'minion' || src.kind === 'totem') && owner.classId === 'shaman') pct += 20;
   }
   base *= Math.max(0.1, 1 + pct / 100);
   if (tgt.statuses.has('shock')) base *= 1.15;
@@ -132,6 +140,14 @@ export function dealDamage(inst, src, tgt, spec, mult = 1, opt = {}) {
     if (ts.ks?.has('thorns') && src !== tgt && !src.dead) applyRaw(inst, src, Math.round(dmg * 0.3), tgt);
     if (ts.reflect && src !== tgt && !src.dead) applyRaw(inst, src, Math.round(dmg * ts.reflect / 100), tgt);
     if (crit && ks.has('critcascade')) for (const k in owner.cd || {}) owner.cd[k] -= 0.2;
+    switch (owner.classId) {
+      case 'warrior': owner.mp = Math.min(owner.mpMax, owner.mp + owner.mpMax * 0.02); break;
+      case 'paladin': owner.shield = Math.min(owner.hpMax * 0.2, (owner.shield || 0) + owner.hpMax * 0.01); break;
+      case 'assassin': if (Math.random() < 0.25) addStatus(inst, tgt, 'poison', 4, { dps: dmg * 0.05, stacks: 1, max: 10, src: owner.id }); break;
+      case 'cleric': { const allies = [owner, ...inst.allies(owner, 450)]; const low = allies.sort((a, b) => a.hp / a.hpMax - b.hp / b.hpMax)[0]; if (low && low.hp < low.hpMax) heal(inst, low, dmg * 0.08 * (pvp ? 0.5 : 1), { silent: true }); break; }
+      case 'shaman': if (Math.random() < 0.15) addStatus(inst, tgt, 'shock', 3); break;
+      case 'gunslinger': if (crit) for (const k in owner.cd || {}) owner.cd[k] -= 0.3; break;
+    }
     if (crit && s.leg?.has('tempest') && (owner.tempestCd || 0) < inst.time) {
       owner.tempestCd = inst.time + 0.5;
       inst.fx({ k: 'bolt', x: tgt.x, y: tgt.y, el: 'lightning' }, tgt);

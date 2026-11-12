@@ -36,6 +36,19 @@ const BRANCHES = [
 export const STAT_ICON = { atkPct: '⚔', atkSpd: '⚡', critDmg: '💥', crit: '🎯', dmgElAll: '🔥', statusPower: '☠', move: '👟', cdr: '⏱', leech: '🩸', hpPct: '❤', hpRegen: '✚', armorPct: '🛡', res: '🔰', block: '🧱', dmgAll: '✦', minionDmg: '👻', healPower: '💚', dmgMelee: '🗡', dmgRanged: '🏹', dmgDot: '🧪', mpRegen: '💧', area: '◎', shieldPower: '🔵', vit: '💪', dodge: '💨', dmgBoss: '👑' };
 
 const cache = {};
+// words used to name the many generated Notables of each branch
+const NOTABLE_WORDS = {
+  weapon: [['Keen', 'Brutal', 'Honed', 'Savage', 'Masterful', 'Deadly', 'Relentless', 'Tempered', 'Vicious', 'Heavy', 'Precise', 'Battle-born', 'Unstoppable', 'Warforged'], ['Edge', 'Strikes', 'Arms', 'Blows', 'Steel', 'Technique']],
+  element: [['Burning', 'Frozen', 'Storming', 'Toxic', 'Radiant', 'Umbral', 'Arcane', 'Primal', 'Elemental', 'Volatile', 'Searing', 'Glacial', 'Thundering', 'Prismatic'], ['Affinity', 'Conduit', 'Surge', 'Heart', 'Mastery', 'Flux']],
+  speed: [['Swift', 'Fleeting', 'Rapid', 'Agile', 'Hasted', 'Nimble', 'Quick', 'Restless', 'Darting', 'Windborne', 'Blurred', 'Lightfoot', 'Racing', 'Tempo'], ['Steps', 'Reflexes', 'Motion', 'Rhythm', 'Stride', 'Pace']],
+  crit: [['Lethal', 'Piercing', 'Sharp', 'Fatal', 'Ruthless', 'Exact', 'Cruel', 'Merciless', 'Assassin', 'Sniper', 'Vital', 'Killer', 'Predator', 'Eagle'], ['Precision', 'Instinct', 'Aim', 'Focus', 'Strikes', 'Eye']],
+  leech: [['Thirsting', 'Crimson', 'Vampiric', 'Undying', 'Hungering', 'Sanguine', 'Living', 'Blooded', 'Regal', 'Feral', 'Eternal', 'Hemomantic', 'Ravenous', 'Vital'], ['Blood', 'Vigor', 'Life', 'Veins', 'Pulse', 'Heart']],
+  guard: [['Iron', 'Stone', 'Warded', 'Bastion', 'Stalwart', 'Steadfast', 'Fortified', 'Unbroken', 'Granite', 'Aegis', 'Guardian', 'Bulwark', 'Titan', 'Adamant'], ['Skin', 'Wall', 'Ward', 'Shell', 'Bastion', 'Resolve']],
+  class: [['Ancestral', 'Chosen', 'Sworn', 'Exalted', 'Veteran', 'Legendary', 'Heroic', 'Ascendant', 'Mythic', 'Elder', 'Royal', 'Fabled', 'Awakened', 'Sacred'], ['Discipline', 'Path', 'Calling', 'Legacy', 'Oath', 'Art']],
+};
+const TIERS = [{ r: 400, n: 1 }, { r: 680, n: 2 }, { r: 960, n: 3 }, { r: 1240, n: 4 }, { r: 1520, n: 3 }];
+const RING = 7; // minor nodes per cluster ring
+
 export function buildPassiveTree(classId) {
   if (cache[classId]) return cache[classId];
   const cls = CLASS_BY_ID[classId];
@@ -45,45 +58,61 @@ export function buildPassiveTree(classId) {
   if (cls) {
     const ps = cls.passives.filter((p) => !p.keystone), ks = cls.passives.filter((p) => p.keystone);
     const tri = (st) => Object.fromEntries(Object.entries(st).map(([k, v]) => [k, Math.round(v * 3 * 10) / 10]));
-    branches.push({ id: 'class', th: `สายคลาส ${cls.th}`, color: cls.palette.accent, icon: '★', minors: [{ hpPct: 1 }, { dmgAll: 1.5 }],
-      notables: { A: [ps[0].name, tri(ps[0].stats)], B: [ps[1].name, tri(ps[1].stats)], L: [ps[2].name, tri(ps[2].stats)], R: [ps[3].name, tri(ps[3].stats)] },
+    branches.push({ id: 'class', th: `สายคลาส ${cls.th}`, color: cls.palette.accent, icon: '★', minors: [{ hpPct: 1 }, { dmgAll: 1.5 }, { cdr: 0.8 }],
+      fixed: ps.map((p) => [p.name, tri(p.stats)]),
       keystones: { main: [ks[0].keystone, ks[0].name.replace(' (Keystone)', ''), ks[0].desc], R: [ks[1].keystone, ks[1].name.replace(' (Keystone)', ''), ks[1].desc] } });
   }
   const add = (n) => { nodes.push(n); byId[n.id] = n; return n; };
-  const link = (a, b) => { if (!byId[b].req.includes(a)) byId[b].req.push(a); if (!byId[a].req.includes(b) && a !== 'root') byId[a].req.push(b); };
+  const link = (a, b) => { if (!byId[b].req.includes(a)) byId[b].req.push(a); if (a !== 'root' && !byId[a].req.includes(b)) byId[a].req.push(b); };
   const descOf = (st) => Object.entries(st).map(([k, v]) => `${k} +${v}`).join(', ');
   const sector = (Math.PI * 2) / branches.length;
   branches.forEach((br, bi) => {
     const mid = -Math.PI / 2 + bi * sector;
-    const P = (r, a) => [Math.round(Math.cos(a) * r), Math.round(Math.sin(a) * r)];
-    let mi = 0;
-    const minor = (id, x, y, ring) => { const st = br.minors[mi++ % br.minors.length]; return add({ id: `${br.id}.${id}`, branch: br.id, name: 'Minor', type: 'minor', ranks: 1, stats: st, desc: descOf(st), x, y, req: [], color: br.color, icon: STAT_ICON[Object.keys(st)[0]] || '•', ring }); };
-    const notable = (key, x, y) => { const [name, st] = br.notables[key]; return add({ id: `${br.id}.n${key}`, branch: br.id, name, type: 'notable', ranks: 1, stats: st, desc: descOf(st), x, y, req: [], color: br.color, icon: STAT_ICON[Object.keys(st)[0]] || br.icon }); };
-    const keystone = (key, x, y) => { const k = br.keystones[key]; if (!k) return null; const [ks, name, desc, st] = k; return add({ id: `${br.id}.k${key}`, branch: br.id, name, type: 'keystone', keystone: ks.startsWith('__') ? null : ks, ranks: 1, stats: st || {}, desc: desc || descOf(st), x, y, req: [], color: br.color, icon: br.icon }); };
-    // ring cluster: n nodes on a circle around (cx,cy); returns ring node ids
-    const cluster = (tag, cR, cA, rr, n, notKey) => {
-      const [cx, cy] = P(cR, cA); const ids = [];
-      for (let i = 0; i < n; i++) { const a = cA + Math.PI + (i / n) * Math.PI * 2; const nd = minor(`${tag}${i}`, Math.round(cx + Math.cos(a) * rr), Math.round(cy + Math.sin(a) * rr), { cx, cy, r: rr }); ids.push(nd.id); }
-      for (let i = 0; i < n; i++) link(ids[i], ids[(i + 1) % n]);
-      const nt = notable(notKey, cx, cy); link(ids[Math.floor(n / 3)], nt.id); link(ids[Math.floor((2 * n) / 3)], nt.id);
-      return ids;
+    let mi = 0, ni = 0;
+    const words = NOTABLE_WORDS[br.id] || NOTABLE_WORDS.class;
+    const minorStat = () => br.minors[mi++ % br.minors.length];
+    const minor = (id, x, y, ring) => { const st = minorStat(); return add({ id: `${br.id}.${id}`, branch: br.id, name: 'Minor', type: 'minor', ranks: 1, stats: st, desc: descOf(st), x: Math.round(x), y: Math.round(y), req: [], color: br.color, icon: STAT_ICON[Object.keys(st)[0]] || '•', ring }); };
+    const notableAt = (id, x, y) => {
+      let name, st;
+      const legacy = br.notables && Object.values(br.notables)[ni];
+      if (br.fixed && br.fixed[ni]) [name, st] = br.fixed[ni];
+      else if (legacy) [name, st] = legacy;
+      else {
+        name = `${words[0][ni % words[0].length]} ${words[1][Math.floor(ni / words[0].length) % words[1].length]}`;
+        st = {}; for (let k = 0; k < 2; k++) { const m = br.minors[(ni + k) % br.minors.length]; for (const [kk, vv] of Object.entries(m)) st[kk] = Math.round(((st[kk] || 0) + vv * (3 + ni % 3)) * 10) / 10; }
+      }
+      ni++;
+      return add({ id: `${br.id}.${id}`, branch: br.id, name, type: 'notable', ranks: 1, stats: st, desc: descOf(st), x: Math.round(x), y: Math.round(y), req: [], color: br.color, icon: STAT_ICON[Object.keys(st)[0]] || br.icon });
     };
+    const keystone = (key, x, y) => { const k = br.keystones[key]; if (!k) return null; const [ksId, name, desc, st] = k; return add({ id: `${br.id}.k${key}`, branch: br.id, name, type: 'keystone', keystone: ksId.startsWith('__') ? null : ksId, ranks: 1, stats: st || {}, desc: desc || descOf(st), x: Math.round(x), y: Math.round(y), req: [], color: br.color, icon: br.icon }); };
+    const cluster = (tag, cx, cy, inA) => {
+      const rr = 66; const ids = [];
+      for (let i = 0; i < RING; i++) { const a = inA + (i / RING) * Math.PI * 2; ids.push(minor(`${tag}r${i}`, cx + Math.cos(a) * rr, cy + Math.sin(a) * rr, { cx: Math.round(cx), cy: Math.round(cy), r: rr }).id); }
+      for (let i = 0; i < RING; i++) link(ids[i], ids[(i + 1) % RING]);
+      const nt = notableAt(`${tag}n`, cx, cy); link(ids[2], nt.id); link(ids[5], nt.id);
+      return { ids, cx, cy, entry: ids[0], exit: ids[3] };
+    };
+    const path = (tag, fromId, toId, n) => { const A = byId[fromId], B = byId[toId]; let prev = fromId; for (let i = 1; i <= n; i++) { const t = i / (n + 1); const nd = minor(`${tag}${i}`, A.x + (B.x - A.x) * t, A.y + (B.y - A.y) * t); link(prev, nd.id); prev = nd.id; } link(prev, toId); };
     // trunk
     let prev = 'root';
-    for (let i = 0; i < 3; i++) { const [x, y] = P(150 + i * 55, mid); const nd = minor(`t${i}`, x, y); link(prev, nd.id); prev = nd.id; }
-    const A = cluster('a', 380, mid, 72, 6, 'A'); link(prev, A[0]);
-    // outer path -> cluster B -> keystone
-    let p2 = A[3];
-    for (let i = 0; i < 2; i++) { const [x, y] = P(500 + i * 52, mid); const nd = minor(`p${i}`, x, y); link(p2, nd.id); p2 = nd.id; }
-    const B = cluster('b', 680, mid, 72, 6, 'B'); link(p2, B[0]);
-    const [kx, ky] = P(820, mid); const km = keystone('main', kx, ky); if (km) link(B[3], km.id);
-    // side clusters
-    for (const [side, sgn] of [['L', -1], ['R', 1]]) {
-      const a = mid + sgn * sector * 0.3;
-      const S2 = cluster(side.toLowerCase(), 560, a, 58, 5, side);
-      link(A[sgn < 0 ? 4 : 2], S2[0]);
-      const k = br.keystones[side]; if (k) { const [x, y] = P(690, a + sgn * sector * 0.05); const kn = keystone(side, x, y); link(S2[2], kn.id); }
-    }
+    for (let i = 0; i < 3; i++) { const nd = minor(`t${i}`, Math.cos(mid) * (150 + i * 60), Math.sin(mid) * (150 + i * 60)); link(prev, nd.id); prev = nd.id; }
+    const tiers = [];
+    TIERS.forEach((T, ti) => {
+      const row = [];
+      for (let k = 0; k < T.n; k++) {
+        const a = mid + (T.n === 1 ? 0 : (k / (T.n - 1) - 0.5) * sector * 0.72);
+        const cx = Math.cos(a) * T.r, cy = Math.sin(a) * T.r;
+        const c = cluster(`c${ti}${k}`, cx, cy, a + Math.PI);
+        if (ti === 0) link(prev, c.entry);
+        else { const inner = tiers[ti - 1].slice().sort((p, q) => Math.hypot(p.cx - cx, p.cy - cy) - Math.hypot(q.cx - cx, q.cy - cy))[0]; path(`p${ti}${k}`, inner.exit, c.entry, 2); }
+        if (k > 0) path(`s${ti}${k}`, row[k - 1].ids[2], c.ids[5], 1);
+        row.push(c);
+      }
+      tiers.push(row);
+    });
+    const outer = tiers[tiers.length - 1];
+    const keys = Object.keys(br.keystones);
+    keys.forEach((key, i) => { const c = outer[Math.round((i / Math.max(1, keys.length - 1)) * (outer.length - 1))] || outer[0]; const a = Math.atan2(c.cy, c.cx); const kn = keystone(key, Math.cos(a) * 1720, Math.sin(a) * 1720); if (kn) path(`kp${i}`, c.exit, kn.id, 1); });
   });
   const tree = { classId, nodes, byId, branches: branches.map((b) => ({ id: b.id, th: b.th, color: b.color, icon: b.icon })) };
   cache[classId] = tree;

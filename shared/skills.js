@@ -4,7 +4,8 @@
 import { CLASSES, CLASS_BY_ID } from './classes.js';
 import { RUNE_BY_ID, runeFits, runeSlotsForRank } from './runes.js';
 import { ELEMENT_INFO, PVP_DEFAULT } from './constants.js';
-import { SIGS, CLASS_AFFINITY, ELEM_ADJ, FAMILIES } from './signatures.js';
+import { SIGS, SIG_BY_ID, CLASS_AFFINITY, ELEM_ADJ, FAMILIES } from './signatures.js';
+import { resolvedKits, TRAITS } from './classkits.js';
 import { hashStr } from './rng.js';
 
 export const BEHAVIOR = {
@@ -109,58 +110,86 @@ const ALL_SKILLS = new Map();
 export { FAMILIES };
 const CLASS_SKILLS = {};
 
+export const MOD_TH = {
+  stun: 'มึนงง', burn: 'เผาไหม้', bleed: 'เลือดไหล', poison: 'พิษ', chill: 'หนาวเหน็บ', freeze: 'แช่แข็ง', shock: 'ช็อต', slow: 'ช้าลง', root: 'ตรึงขา',
+  blind: 'ตาบอด', weaken: 'อ่อนแรง', silence: 'ใบ้', fear: 'หวาดกลัว', mark: 'ตีตรา', lex: 'ดาเมจครั้งถัดไป x2', sunder: 'เกราะแตก', knockup: 'ลอยกลางอากาศ',
+  knock: 'ผลักกระเด็น', pull: 'ดูดเข้าหา', leech: 'ดูดเลือด', heal: 'ฟื้น HP', shield: 'ได้โล่', haste: 'เร่งความเร็ว', execute: 'ปลิดชีพ HP ต่ำ',
+  crit: 'คริติคอลสูง', pierce: 'ทะลุ', chain: 'กระโดดเป้า', fork: 'แตกกิ่ง', homing: 'นำวิถี', echo: 'ร่ายซ้ำ', detonate: 'ระเบิดตอนจบ', linger: 'ทิ้งพื้นที่อันตราย',
+  x2: 'ทำงาน 2 ครั้ง', x3: 'ทำงาน 3 ครั้ง', big: 'ขนาดใหญ่', wide: 'วงกว้าง', fast: 'คูลดาวน์เร็ว', heavy: 'หนักหน่วง', long: 'ระยะ/เวลานาน', cleanse: 'ชำระล้าง',
+  aura: 'ส่งผลทั้งปาร์ตี้', taunt: 'ยั่วยุ', regen: 'ฟื้นฟูต่อเนื่อง', block: 'บล็อก', cdr: 'ลดคูลดาวน์',
+};
+const STATUS_MODS = new Set(['stun', 'burn', 'bleed', 'poison', 'chill', 'freeze', 'shock', 'slow', 'blind', 'weaken']);
+const SUPPORT_BEH = new Set(['buff', 'heal', 'summon', 'totem']);
+function applyMods(s, mods) {
+  for (const m of mods) {
+    if (STATUS_MODS.has(m)) { if (!s.mech) s.mech = m; else if (s.mech !== m) s.extraStatus.push(m); if (SUPPORT_BEH.has(s.behavior) && s.behavior !== 'summon' && s.behavior !== 'totem') s.castNova = Math.max(s.castNova, 70); s.sp *= 1.2; continue; }
+    switch (m) {
+      case 'silence': s.silence = 2; break; case 'root': s.root = 2; break; case 'fear': s.fear = 2; break; case 'mark': s.extraStatus.push('mark'); break;
+      case 'lex': s.lex = true; break; case 'sunder': s.sunder = 4; break; case 'knockup': s.knockup = 0.8; break;
+      case 'knock': s.knock += 90; break; case 'pull': s.pull = true; break; case 'leech': s.leech += 12; break;
+      case 'heal': if (s.behavior === 'heal') s.heal *= 1.3; else s.healOnHit += 2; break;
+      case 'shield': s.selfShield += 6; break; case 'haste': s.selfHaste = true; break; case 'execute': s.execute = Math.max(s.execute, 0.3); break;
+      case 'crit': s.critBonus += 25; break; case 'pierce': s.pierce += 3; break; case 'chain': s.chain += 2; break; case 'fork': s.fork += 1; break;
+      case 'homing': s.homing = true; break; case 'echo': s.echo += 1; s.echoMul = 0.6; break; case 'detonate': s.detonate = Math.max(s.detonate, 90); break;
+      case 'linger': s.linger += 3; break;
+      case 'x2': s.multiHit = Math.max(2, (s.multiHit || 1) * 2); s.dmg *= 0.75; break;
+      case 'x3': s.multiHit = Math.max(3, (s.multiHit || 1) * 3); s.dmg *= 0.6; break;
+      case 'big': s.radius *= 1.4; s.width *= 1.3; s.dmg *= 1.2; s.cd *= 1.25; break;
+      case 'wide': s.radius *= 1.3; s.arc = Math.min(360, s.arc * 1.4); s.width *= 1.4; if (s.behavior === 'projectile') { s.count += 2; s.spread = Math.max(s.spread, 30); } s.dmg *= 0.9; break;
+      case 'fast': s.cd *= 0.6; s.dmg *= 0.75; s.cost *= 0.7; break;
+      case 'heavy': s.dmg *= 1.5; s.cd *= 1.5; break;
+      case 'long': s.range *= 1.5; s.duration *= 1.5; s.linger *= 1.5; break;
+      case 'cleanse': s.cleanse = true; break; case 'aura': s.aura = Math.max(s.aura, 380); break; case 'taunt': s.taunt = 4; break;
+      case 'regen': s.buff = { ...(s.buff || {}), hpRegen: ((s.buff || {}).hpRegen || 0) + 25 }; if (s.behavior !== 'buff') s.healOnHit += 1; break;
+      case 'block': s.buff = { ...(s.buff || {}), block: ((s.buff || {}).block || 0) + 20 }; break;
+      case 'cdr': s.buff = { ...(s.buff || {}), cdr: ((s.buff || {}).cdr || 0) + 15 }; break;
+    }
+  }
+}
+const slug = (n) => n.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+const DISC_CACHE = {};
+export const classDisciplines = (classId) => DISC_CACHE[classId] || [];
+export { TRAITS };
+
 export function generateClassSkills(cls) {
   const list = [];
-  const aff = CLASS_AFFINITY[cls.id] || {};
-  const offElement = (g) => g.el && g.el !== 'class' && g.el !== 'physical' && !cls.elements.includes(g.el);
-  const chosen = SIGS.map((g) => ({ g, score: (aff[g.fam] ?? 1) * 10 + (hashStr(cls.id + ':' + g.id) % 10) - (offElement(g) ? 100 : 0) }))
-    .sort((a, b) => b.score - a.score).slice(0, 90).map((x) => x.g)
-    .sort((a, b) => a.tier - b.tier || (aff[b.fam] ?? 1) - (aff[a.fam] ?? 1) + (DMG_FAM.has(b.fam) - DMG_FAM.has(a.fam)) * 0 || (hashStr(cls.id + g2(a)) % 997) - (hashStr(cls.id + g2(b)) % 997));
-  // the three level-1 skills are the class's bread-and-butter attacks
-  const topDmg = Math.max(...[...DMG_FAM].map((f) => aff[f] ?? 0));
-  const starters = chosen.filter((g) => g.tier === 1 && DMG_FAM.has(g.fam) && (aff[g.fam] ?? 0) >= topDmg - 1 && g.b !== 'trap').sort((a, b) => (aff[b.fam] ?? 0) - (aff[a.fam] ?? 0)).slice(0, 3);
-  const ordered = [...starters, ...chosen.filter((g) => !starters.includes(g))];
-  chosen.length = 0; chosen.push(...ordered);
+  const kit = resolvedKits()[cls.id]; if (!kit) return list;
   const nonPhys = cls.elements.filter((e) => e !== 'physical');
-  chosen.forEach((g, idx) => {
-    const h = hashStr(cls.id + '/' + g.id);
-    let el;
-    if (g.el === 'class') el = nonPhys[0] || 'physical';
-    else if (g.el) el = cls.elements.includes(g.el) ? g.el : (g.el === 'physical' ? 'physical' : nonPhys[h % Math.max(1, nonPhys.length)] || 'physical');
-    else if (['strike', 'sweep', 'shot', 'move'].includes(g.fam)) el = cls.elements.includes('physical') && h % 2 ? 'physical' : cls.elements[h % cls.elements.length];
-    else if (['spell', 'control'].includes(g.fam)) el = nonPhys.length ? nonPhys[h % nonPhys.length] : cls.elements[0];
-    else el = cls.elements[0];
+  const pickEl = (g, h) => {
+    if (g.el === 'class') return nonPhys[0] || 'physical';
+    if (g.el) return cls.elements.includes(g.el) || g.el === 'physical' ? g.el : (nonPhys[h % Math.max(1, nonPhys.length)] || 'physical');
+    if (['strike', 'sweep', 'shot', 'move'].includes(g.fam)) return cls.elements.includes('physical') && h % 2 ? 'physical' : cls.elements[h % cls.elements.length];
+    if (['spell', 'control'].includes(g.fam)) return nonPhys.length ? nonPhys[h % nonPhys.length] : cls.elements[0];
+    return cls.elements[0];
+  };
+  DISC_CACHE[cls.id] = kit.disc.map(([title, icon], i) => ({ id: `d${i}`, title, icon }));
+  const make = (e, kind, idx, discId) => {
+    const g = SIG_BY_ID[e.form]; const h = hashStr(cls.id + '/' + e.name);
+    const el = e.el || pickEl(g, h);
     const base = makeBase(g.b, { el, mech: g.p.mech || null }, g.p);
-    base.sig = g.id; base.v = g.v; base.fam = g.fam;
+    base.el = el; base.sig = g.id; base.v = g.v; base.fam = g.fam;
     if (g.p.extra) base.extraStatus = [...g.p.extra];
     if (g.p.erupt) { base.linger = g.p.erupt * 0.4; base.tick = 0.4; }
-    base.dmg *= 1 + (g.tier - 1) * 0.15;
-    let name = g.names?.[el];
-    const dealsDmg = (g.p.dmg ?? BEHAVIOR[g.b].dmg) > 0 && DMG_FAM.has(g.fam) || g.fam === 'control' && (g.p.dmg ?? 0) > 0;
-    if (!name) name = (ELEM_ADJ[el] && !g.el && dealsDmg ? `${ELEM_ADJ[el]} ` : '') + g.name;
+    base.dmg *= 1 + (g.tier - 1) * 0.12;
+    applyMods(base, e.mods);
+    if (kind === 'ultimate') {
+      base.dmg *= 3.6; base.radius *= 1.6; base.width *= 1.8; base.range *= 1.25; base.sp *= 1.8; base.heal *= 2.5;
+      if (['projectile', 'barrage'].includes(g.b)) base.count += 4;
+      if (g.b === 'summon') { base.duration *= 1.5; base.count += 1; }
+      if (g.b === 'buff') { base.duration = Math.max(base.duration, 12); for (const k in base.buff || {}) base.buff[k] = Math.round(base.buff[k] * 2); }
+      if (base.rain) base.rain = Math.round(base.rain * 1.8);
+      base.cd = 45 + idx * 4; base.cost = 35; base.windup = Math.max(base.windup, 0.25);
+    }
     const def = {
-      id: `${cls.id}.${g.id}`, classId: cls.id, kind: 'active', school: g.fam, sig: g.id, icon: g.icon, name, behavior: g.b, el: base.el,
-      unlock: idx < 3 ? 1 : Math.min(298, Math.round(1 + idx * 3.33)), base, tier: g.tier, variantTh: g.th,
+      id: `${cls.id}.${slug(e.name)}`, classId: cls.id, kind, school: discId, sig: g.id, icon: g.icon, name: e.name, behavior: g.b, el,
+      unlock: kind === 'ultimate' ? 20 + idx * 31 : idx < 3 ? 1 : Math.min(298, Math.round(1 + idx * 3.33)), base, mods: e.mods, variantTh: g.th,
     };
-    def.desc = describe(def);
-    list.push(def);
-  });
-  cls.ultimates.forEach((u, ui) => {
-    const base = makeBase(u.b, { el: u.el, mech: u.mech }, u.p);
-    base.dmg *= 4.2; base.radius *= 1.8; base.width *= 2; base.range *= 1.3; base.sp *= 2;
-    if (['projectile', 'barrage'].includes(u.b)) base.count += 6;
-    if (u.b === 'summon') base.duration *= 1.5;
-    if (u.b === 'buff') { base.duration = 12; scaleBuff(base, 1); }
-    if (u.b === 'heal') base.heal *= 3;
-    if (u.b === 'orbit') { base.count += 3; base.duration *= 1.6; }
-    base.cd = 45 + ui * 4; base.cost = 35; base.windup = Math.max(base.windup, 0.25);
-    const def = {
-      id: `${cls.id}.ult.${ui}`, classId: cls.id, kind: 'ultimate', school: 'ultimate', variant: 'ultimate', name: u.name,
-      behavior: u.b, el: u.el, unlock: 20 + ui * 31, base, variantTh: 'อัลติเมท: พลังทำลายล้างมหาศาล', icon: ULT_ICON[u.b] || '🌟',
-    };
-    def.desc = describe(def);
-    list.push(def);
-  });
+    def.desc = `${g.th}${e.mods.length ? ' • ' + e.mods.map((m) => MOD_TH[m] || m).join(' • ') : ''} • ธาตุ${ELEMENT_INFO[el].th}`;
+    return def;
+  };
+  // unlock order: interleave disciplines so every discipline opens early
+  for (let j = 0; j < 10; j++) kit.disc.forEach(([, , lines], d) => list.push(make(lines[j], 'active', j * 9 + d, `d${d}`)));
+  kit.ult.forEach((e, ui) => list.push(make(e, 'ultimate', ui, 'ultimate')));
   list.sort((a, b) => a.unlock - b.unlock);
   for (const d of list) ALL_SKILLS.set(d.id, d);
   CLASS_SKILLS[cls.id] = list;

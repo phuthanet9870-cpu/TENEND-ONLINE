@@ -2,14 +2,17 @@
 import { TILE, ELEMENT_INFO, STATUS_BITS } from '/shared/constants.js';
 import { MAPS } from '/shared/world.js';
 import { drawProjectile, drawImpact, drawField } from './vfx.js';
+import { FX, drawDome, drawIcePrism } from './fx2.js';
 import { charSprite, weaponSprite, monsterSprite, groundTile, plazaTile, obstacleSprite, wallTile, borderTile, shade, drawEmblem } from './sprites.js';
 
 const BIT = Object.fromEntries(STATUS_BITS.map((s, i) => [s, 1 << i]));
+const glowOf = (el) => ({ fire: '#ff8a2a', ice: '#7ad8ff', lightning: '#a8c8ff', poison: '#8aff4a', holy: '#ffe080', shadow: '#9a5cff', arcane: '#ff5cd6' }[el] || '#ffffff');
 const elc = (el) => ELEMENT_INFO[el]?.color || '#ffffff';
 const elg = (el) => ELEMENT_INFO[el]?.glow || '#ffffff';
 
 export class Renderer {
   constructor(canvas, game) {
+    this.fxp = new FX();
     this.cv = canvas; this.ctx = canvas.getContext('2d'); this.g = game;
     this.cam = { x: 0, y: 0 }; this.fx = []; this.texts = []; this.parts = []; this.projs = new Map(); this.orbits = new Map();
     this.flash = new Map(); this.swing = new Map(); this.t = 0; this.shake = 0;
@@ -67,7 +70,7 @@ export class Renderer {
         Object.assign(p, { x: e.x, y: e.y, vx: e.vx, vy: e.vy, r: e.r, el: e.el, until: now + e.life + 0.05, m: e.m, v: e.v || p.v });
         this.projs.set(e.id, p); break;
       }
-      case 'pend': { const p = this.projs.get(e.id); if (p) { this.burst(p.x, p.y, elc(p.el), 6); this.projs.delete(e.id); } break; }
+      case 'pend': { const p = this.projs.get(e.id); if (p) { this.fxp.sparks(p.x, p.y, p.el, 8, 120); if (p.el === 'fire') this.fxp.smoke(p.x, p.y, 2, 8, 20, 0.8); this.fxp.light(p.x, p.y, 40, glowOf(p.el), 0.15); this.projs.delete(e.id); } break; }
       case 'dmg': {
         const u = G.units.get(e.id); if (!u) break;
         if (e.miss) this.text(u.x, u.y - 30, 'MISS', '#aaaaaa', 12);
@@ -75,7 +78,7 @@ export class Renderer {
         else {
           const mine = e.id === G.you; const col = mine ? '#ff5a5a' : e.c ? '#ffe14a' : elc(e.el) === '#e0d6c8' ? '#ffffff' : elc(e.el);
           this.text(u.x + (Math.random() - 0.5) * 20, u.y - 30, (e.c ? '★' : '') + fmt(e.v), col, e.c ? 18 : 13);
-          this.flash.set(e.id, now + 0.1); this.burst(u.x, u.y - 10, elc(e.el), e.c ? 8 : 4);
+          this.flash.set(e.id, now + 0.1); this.fxp.sparks(u.x, u.y - 14, e.el, e.c ? 12 : 5, e.c ? 220 : 130);
           if (mine) this.shake = Math.min(6, this.shake + 2);
         }
         break;
@@ -85,21 +88,21 @@ export class Renderer {
       case 'area': this.fx.push({ ...e, t0: now }); if (e.boss) this.shake = Math.min(10, this.shake + 4); break;
       case 'tele': this.fx.push({ ...e, kind: 'tele', t0: now }); break;
       case 'teleCancel': this.fx = this.fx.filter((f) => !(f.kind === 'tele' && f.tid === e.id)); break;
-      case 'beam': this.fx.push({ ...e, kind: 'beam', t0: now }); break;
-      case 'chain': this.fx.push({ ...e, kind: 'chain', t0: now }); break;
-      case 'bolt': this.fx.push({ kind: 'chain', pts: [[e.x, e.y - 300], [e.x + 10, e.y - 150], [e.x - 8, e.y - 70], [e.x, e.y]], el: 'lightning', t0: now }); break;
-      case 'dash': this.fx.push({ ...e, kind: 'dash', t0: now }); { const u = G.units.get(e.id); if (u && e.dur) { u.anim = { x1: e.x1, y1: e.y1, x2: e.x2, y2: e.y2, t0: now, dur: e.dur, leap: e.leap }; } } break;
+      case 'beam': this.fx.push({ ...e, kind: 'beam', t0: now }); this.fxp.sparks(e.x2, e.y2, e.el, 14, 200); this.fxp.light(e.x2, e.y2, 70, glowOf(e.el), 0.25); this.fxp.light(e.x1, e.y1, 50, glowOf(e.el), 0.2); break;
+      case 'chain': for (let i = 1; i < e.pts.length; i++) { this.fxp.bolt(e.pts[i - 1][0], e.pts[i - 1][1], e.pts[i][0], e.pts[i][1], glowOf(e.el), 0.3, 2.5, 1); this.fxp.sparks(e.pts[i][0], e.pts[i][1], e.el, 6, 140); } break;
+      case 'bolt': this.fxp.strike(e.x, e.y, e.el || 'lightning'); break;
+      case 'dash': this.fx.push({ ...e, kind: 'dash', t0: now }); for (let i = 0; i < 10; i++) { const k = i / 10; this.fxp.trail(e.x1 + (e.x2 - e.x1) * k, e.y1 - 14 + (e.y2 - e.y1) * k, e.x2 - e.x1, e.y2 - e.y1, e.el); } if (e.blink) { this.fxp.arcaneBurst(e.x1, e.y1, 30); this.fxp.arcaneBurst(e.x2, e.y2, 30); } { const u = G.units.get(e.id); if (u && e.dur) { u.anim = { x1: e.x1, y1: e.y1, x2: e.x2, y2: e.y2, t0: now, dur: e.dur, leap: e.leap }; } } break;
       case 'cast': { this.swing.set(e.id, { t0: now, ang: e.ang, beh: e.beh }); const u = G.units.get(e.id); if (u && e.n && e.id !== G.you && u.meta?.k !== 'monster') this.text(u.x, u.y - 52, e.n, '#c8e8ff', 10, 0.8); break; }
-      case 'ult': { const u = G.units.get(e.id); if (u) { this.text(u.x, u.y - 70, e.n, elc(e.el), 18, 1.8); this.fx.push({ kind: 'ring', x: u.x, y: u.y, el: e.el, t0: now, r: 200 }); this.shake = 8; } break; }
+      case 'ult': { const u = G.units.get(e.id); if (u) { this.text(u.x, u.y - 70, e.n, elc(e.el), 18, 1.8); this.fx.push({ kind: 'ring', x: u.x, y: u.y, el: e.el, t0: now, r: 200 }); this.fxp.pillar(u.x, u.y, e.el || 'holy', 220, 34); this.fxp.light(u.x, u.y, 260, glowOf(e.el), 0.6); this.shake = 8; } break; }
       case 'matk': this.swing.set(e.id, { t0: now, ang: e.ang, beh: 'melee', wind: e.wind }); break;
       case 'orbit': this.orbits.set(e.id, { owner: e.owner, n: e.n, r: e.r, until: now + e.dur, el: e.el }); break;
       case 'orbitEnd': this.orbits.delete(e.id); break;
       case 'buff': this.fx.push({ kind: 'ring', x: 0, y: 0, follow: e.id, el: e.el, t0: now, r: 50 }); { const u = G.units.get(e.id); if (u && e.v) this.fx.push({ k: 'area', x: u.x, y: u.y, follow: e.id, shape: 'circle', r: 46, el: e.el, delay: 0, dur: 0, v: e.v === 'parry' || e.v === 'steel' ? 'runes' : e.v === 'rage' ? 'explosion' : e.v === 'wind' ? 'rings' : e.v === 'note' ? 'heal' : e.v === 'enchant' ? 'sparkle' : e.v, t0: now }); } break;
       case 'hop': { const u = G.units.get(e.id); if (u) u.anim = { x1: u.x, y1: u.y, x2: u.x, y2: u.y, t0: now, dur: Math.min(1, e.dur), leap: 1 }; break; }
-      case 'lvl': { const u = G.units.get(e.id); if (u) { this.fx.push({ kind: 'ring', follow: e.id, el: 'holy', t0: now, r: 90 }); this.text(u.x, u.y - 70, 'LEVEL UP!', '#7fe8ff', 18, 2); } break; }
+      case 'lvl': { const u = G.units.get(e.id); if (u) { this.fxp.respawn(u.x, u.y); this.fx.push({ kind: 'ring', follow: e.id, el: 'holy', t0: now, r: 90 }); this.text(u.x, u.y - 70, 'LEVEL UP!', '#7fe8ff', 18, 2); } break; }
       case 'counter': this.fx.push({ kind: 'ring', follow: e.id, el: 'lightning', t0: now, r: 40, fast: 1 }); break;
       case 'dodge': this.fx.push({ kind: 'ghost', id: e.id, t0: now }); break;
-      case 'die': { const u = G.units.get(e.id); if (u && !e.quiet) this.burst(u.x, u.y - 8, u.meta?.t || '#fff', 14); break; }
+      case 'die': { const u = G.units.get(e.id); if (u && !e.quiet) { if (u.flags & BIT.freeze) this.fxp.shatter(u.x, u.y); else if (u.meta?.b) this.fxp.explosion(u.x, u.y, 160, u.meta?.el || 'fire'); else this.fxp.disintegrate(u.x, u.y, 'physical', (u.meta?.r || 12) * 3); } break; }
       case 'trapEnd': this.fx = this.fx.filter((f) => !(f.trap && Math.abs(f.x - e.x) < 2 && Math.abs(f.y - e.y) < 2)); break;
     }
   }
@@ -131,7 +134,7 @@ export class Renderer {
     }
     // ground FX (areas, telegraphs, traps, objectives)
     this.drawObjectives(ctx);
-    this.drawGroundFx(ctx);
+    this.drawGroundFx(ctx, dt);
     this.drawNavAndTarget(ctx);
     // drops
     for (const d of G.drops) {
@@ -152,6 +155,7 @@ export class Renderer {
     list.sort((a, b) => a.y - b.y);
     for (const it of list) { if (it.o) { const [x, y] = this.w2s(it.o.x, it.o.y); ctx.drawImage(obstacleSprite(it.o.type, it.o.seed), x - 16, y - 52); } else if (it.u) this.drawUnit(ctx, it.u); else if (it.portal) this.drawPortal(ctx, it.portal); else this.drawNpc(ctx, it.n); }
     this.drawProjectiles(ctx, dt);
+    this.fxp.draw(ctx, dt, (wx, wy) => this.w2s(wx, wy));
     this.drawAirFx(ctx);
     this.drawOrbits(ctx);
     // particles
@@ -204,7 +208,7 @@ export class Renderer {
     const moving = u.moving;
     const frame = dead ? 0 : moving ? (Math.floor(this.t * 8 + u.id) % 4 === 1 ? 1 : Math.floor(this.t * 8 + u.id) % 4 === 3 ? 2 : 0) : 0;
     ctx.save(); ctx.translate(x, y - lift);
-    if (u.flags & BIT.freeze) ctx.filter = 'hue-rotate(180deg) saturate(2) brightness(1.3)';
+    if (u.flags & BIT.freeze) ctx.filter = 'saturate(0.4) brightness(1.25)';
     if (flash) ctx.filter = 'brightness(3)';
     const isHuman = m.k === 'player' || m.k === 'bot' || (m.k === 'minion' && (m.c === 'clone' || m.c === 'angel'));
     if (isHuman) {
@@ -237,11 +241,13 @@ export class Renderer {
     // status visuals
     if (!dead) {
       if (u.flags & BIT.stun) for (let i = 0; i < 3; i++) { const a = this.t * 5 + i * 2.1; ctx.fillStyle = '#ffe14a'; ctx.fillRect(x + Math.cos(a) * 12 - 2, topY + 4 + Math.sin(a) * 3, 4, 4); }
-      if (u.flags & BIT.burn && Math.random() < 0.3) this.parts.push({ x: u.x + (Math.random() - 0.5) * r, y: u.y - Math.random() * 20, vx: 0, vy: -60, c: '#ff8a2a', t0: this.t, life: 0.4 });
+      if (u.flags & BIT.burn && Math.random() < 0.5) this.fxp.flame(u.x, u.y - Math.random() * r * 1.5, 1, r, 70, 2, 0.45);
+      if (u.flags & BIT.freeze) drawIcePrism(ctx, x, y - lift + 2, r * 2.2, r * 3.4, this.t);
       if (u.flags & BIT.poison && Math.random() < 0.2) this.parts.push({ x: u.x + (Math.random() - 0.5) * r, y: u.y - Math.random() * 20, vx: 0, vy: -30, c: '#7be04a', t0: this.t, life: 0.5 });
       if (u.flags & BIT.bleed && Math.random() < 0.15) this.parts.push({ x: u.x, y: u.y - 15, vx: (Math.random() - 0.5) * 40, vy: 0, c: '#c0102a', t0: this.t, life: 0.4 });
-      if (u.flags & BIT.shock && Math.random() < 0.15) this.fx.push({ kind: 'chain', pts: [[u.x - 10, u.y - 30], [u.x + 6, u.y - 18], [u.x - 4, u.y - 6]], el: 'lightning', t0: this.t, short: 1 });
-      if (u.sh > 0 || u.flags & BIT.shield) { ctx.strokeStyle = 'rgba(160,224,255,0.7)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y - lift - 18, r + 12, 0, 7); ctx.stroke(); }
+      if (u.flags & BIT.shock && Math.random() < 0.12) this.fxp.bolt(u.x - r, u.y - r * 2.5, u.x + r * 0.6, u.y - 4, '#c8e0ff', 0.1, 1.2, 0);
+      if (u.flags & BIT.poison && Math.random() < 0.15) this.fxp.add({ x: u.x + (Math.random() - 0.5) * r, y: u.y - r * 2, vx: 0, vy: -25, life: 0.7, pal: ['#f0ffd0', '#8aff4a', '#2a8a2a'], shape: 'bubble', size: 2, add: false });
+      if (u.sh > 0 || u.flags & BIT.shield) drawDome(ctx, x, y - lift + 2, r + 14, this.t + u.id);
       if (u.flags & BIT.weak) { ctx.fillStyle = `rgba(255,40,40,${0.4 + Math.sin(this.t * 10) * 0.3})`; ctx.beginPath(); ctx.arc(x, y - r - 10, 8, 0, 7); ctx.fill(); }
       if (u.flags & BIT.buff) { ctx.strokeStyle = 'rgba(255,208,96,0.5)'; ctx.beginPath(); ctx.ellipse(x, y + 2, r + 6, (r + 6) * 0.4, 0, 0, 7); ctx.stroke(); }
     }
@@ -270,6 +276,7 @@ export class Renderer {
       if (this.t > p.until) { this.projs.delete(id); continue; }
       p.x += p.vx * dt; p.y += p.vy * dt;
       p.trail.push([p.x, p.y]); if (p.trail.length > 6) p.trail.shift();
+      if (!p.m) this.fxp.trail(p.x, p.y, p.vx, p.vy, p.el, p.r); else if (Math.random() < 0.5) this.fxp.trail(p.x, p.y, p.vx, p.vy, 'fire', p.r);
       const c = elc(p.el), g = elg(p.el);
       ctx.strokeStyle = c; ctx.globalAlpha = 0.5; ctx.lineWidth = Math.max(2, p.r * 0.8); ctx.beginPath();
       p.trail.forEach(([tx, ty], i) => { const [sx, sy] = this.w2s(tx, ty); i ? ctx.lineTo(sx, sy) : ctx.moveTo(sx, sy); }); ctx.stroke(); ctx.globalAlpha = 1;
@@ -294,7 +301,7 @@ export class Renderer {
       }
     }
   }
-  drawGroundFx(ctx) {
+  drawGroundFx(ctx, dt0 = 0.016) {
     const keep = [];
     for (const f of this.fx) {
       const age = this.t - f.t0;
@@ -328,12 +335,14 @@ export class Renderer {
       }
       const a = age - (f.delay || 0);
       if (f.dur) { // lingering field
+        this.fxp.field(f.x, f.y, f.r || f.len || 60, f.heal ? 'holy' : f.el, f.v, dt0);
         const tint = drawField(ctx, f, x, y, this.t, col, elg(f.el));
         ctx.globalAlpha = 0.18 + Math.sin(this.t * 6) * 0.06; ctx.fillStyle = tint || col; this.shapePath(ctx, f, x, y); ctx.fill('evenodd');
         ctx.globalAlpha = 0.5; ctx.strokeStyle = col; ctx.lineWidth = 1; this.shapePath(ctx, f, x, y); ctx.stroke(); ctx.globalAlpha = 1;
         if (Math.random() < 0.3) this.parts.push({ x: f.x + (Math.random() - 0.5) * (f.r || 60), y: f.y + (Math.random() - 0.5) * (f.r || 60) * 0.6, vx: 0, vy: -40, c: col, t0: this.t, life: 0.5 });
       } else { // impact burst
         if (f.ghost) continue;
+        if (!f.particled) { f.particled = 1; this.impactFx(f); }
         if (f.v && drawImpact(ctx, f, x, y, Math.min(1, a / 0.4), col, elg(f.el))) { if (a < 0.05 && !f.burst) { f.burst = 1; this.burst(f.x, f.y, col, 6); } continue; }
         const p = Math.min(1, a / 0.3);
         ctx.globalAlpha = (1 - p) * 0.55; ctx.fillStyle = col; this.shapePath(ctx, f, x, y, f.melee ? 0.6 + p * 0.4 : 0.4 + p * 0.6); ctx.fill('evenodd');
@@ -342,6 +351,23 @@ export class Renderer {
       }
     }
     this.fx = keep;
+  }
+  impactFx(f) {
+    const r = f.r || 60, el = f.heal ? 'holy' : (f.el || 'physical'), v = f.v || '', F = this.fxp, x = f.x, y = f.y;
+    if (f.melee || ['slash', 'crescent', 'xslash', 'combo', 'rend', 'flurry', 'thrust'].includes(v)) { const a = f.ang || 0; for (let i = 0; i < 6; i++) F.sparks(x + Math.cos(a) * r * 0.6, y + Math.sin(a) * r * 0.6 - 10, el, 2, 160); if (el === 'fire') F.flame(x + Math.cos(a) * r * 0.5, y + Math.sin(a) * r * 0.5, 8, r * 0.5); else if (el !== 'physical') F.light(x + Math.cos(a) * r * 0.5, y + Math.sin(a) * r * 0.5, r, glowOf(el), 0.2); return; }
+    if (['explosion', 'bomb', 'meteor', 'asura'].includes(v)) return F.explosion(x, y, r, el === 'physical' ? 'fire' : el);
+    if (v === 'pillar') return F.pillar(x, y, el === 'physical' ? 'holy' : el, 150, r * 0.6);
+    if (v === 'vortex' || v === 'blackhole') return F.implosion(x, y, r, el);
+    if (f.heal || v === 'heal') return F.healBurst(x, y, r);
+    if (['holy', 'cross', 'sparkle'].includes(v) || el === 'holy') return F.holyBeam(x, y, Math.min(80, r));
+    if (v === 'wave' && el === 'ice') return F.waterBurst(x, y, r);
+    if (['frost', 'blizzard', 'stone'].includes(v) || el === 'ice') { if (f.shape === 'donut') { for (let i = 0; i < 24; i++) { const a = (i / 24) * Math.PI * 2; F.iceBurst(x + Math.cos(a) * r, y + Math.sin(a) * r * 0.5, 14); } return; } return F.iceBurst(x, y, r); }
+    if (['bolt', 'storm'].includes(v) || el === 'lightning') { F.strike(x, y, 'lightning', 260); if (r > 80) for (let i = 0; i < 3; i++) F.bolt(x, y, x + (Math.random() - 0.5) * r * 2, y + (Math.random() - 0.5) * r, '#a8c8ff', 0.25, 1.5, 1); return; }
+    if (['dark', 'shadowstep'].includes(v) || el === 'shadow') return F.shadowBurst(x, y, r);
+    if (['cloud', 'swamp', 'vines'].includes(v) || el === 'poison') return F.poisonBurst(x, y, r);
+    if (['runes', 'clock', 'star'].includes(v) || el === 'arcane') return F.arcaneBurst(x, y, r);
+    if (el === 'fire') { if (f.shape === 'donut') return F.fireRing(x, y, r); F.explosion(x, y, Math.min(r, 90), 'fire'); return; }
+    F.dust(x, y, r); F.sparks(x, y - 6, 'physical', 8, 160);
   }
   drawAirFx(ctx) {
     for (const f of this.fx) {

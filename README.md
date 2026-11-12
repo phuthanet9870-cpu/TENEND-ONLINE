@@ -52,9 +52,9 @@ npm test             # integration test แบบ headless (เล่นวน�
 | ระบบ | รายละเอียด |
 |---|---|
 | คลาส | 10 คลาส: Warrior, Paladin, Ranger, Assassin, Arcanist, Necromancer, Cleric, Shaman, Gunslinger, Monk |
-| สกิล | คลาสละ 100 สกิล = **Active 90 + Ultimate 10** • Active ทั้ง 90 สกิลใช้กลไกไม่ซ้ำกันเลย เลือกจากคลัง 125 กลไกแบบ Ragnarok (`shared/signatures.js`) เช่น Bash, Sonic Blow, Storm Gust, Lex Aeterna, Safety Wall, Asura Strike, Fire Wall, Meteor Storm, Napalm Beat, Backstab, Provoke, Kyrie ฯลฯ แต่ละกลไกมีความสามารถ ไอคอน และ VFX ของตัวเอง • คลาสเลือก 90 กลไกตามความถนัด (`CLASS_AFFINITY`) |
+| สกิล | **ทั้งเกม 1,000 สกิล ไม่ซ้ำกันเลย** — 10 คลาส × (Active 90 + Ultimate 10) ทุกคลาสมีชุดสกิลของตัวเองทั้งหมด ไม่มีสกิลใช้ร่วมกันข้ามคลาส (ทั้งชื่อและชุดความสามารถ ตรวจด้วย `node tools/skillcheck.js`) • แต่ละคลาสมี 9 สายสกิลตามธีม เช่น นักรบ: Swordsmanship / Spear Arts / Fury / Warlord / Earthbreaker / Flame Blade / Battlefield / Iron Defense / Executioner • นักบวช: Exorcism / Holy Light / Sanctuary ฯลฯ • สกิล = กลไกหลัก (125 แบบ, `shared/signatures.js`) + ตัวปรับแต่ง 40+ ชนิด (แช่แข็ง/ล่าม/ดึง/ทะลุ/สะท้อน/ดูดเลือด/ประหาร ฯลฯ) + ธาตุ • อัลติเมท 10 สกิลออกแบบเฉพาะคลาส • **Class Trait** ประจำคลาส เช่น Rage Engine, Divine Ward, Hunter's Focus, Venom Edge, Soul Harvest, Combo Chain |
 | Support Runes | 39 รูนส่วนกลาง เปลี่ยน **รูปแบบ** สกิล เช่น Split, Chain, Fork, Echo, Nova/Trap/Totem/Orbit/Spirit Conversion, Gravity Well, Mirror, Cascade, Element Shift ฯลฯ (ช่องรูน 1/2/3 ที่ Rank 1/8/16) • ฟิวส์ 3 รูนเป็นรูนระดับสูงขึ้น |
-| Passive Tree | แบบ Path of Exile: รูปคลาสตรงกลาง เส้นเชื่อมโค้ง กลุ่มโหนดวงแหวน ~230 โหนด (Minor / Notable / Keystone) • 7 สาย: อาวุธ (แยก melee/ranged/magic) • ธาตุ (8 ธาตุ + เจาะเกราะ) • ความเร็ว • คริติคอล • ดูดเลือด • ป้องกัน • **สายประจำคลาส** พร้อม Keystone ที่เปลี่ยนวิธีเล่น (Berserker, Blood Magic, Momentum, Critical Cascade, Legion, Totem Lord, Sniper, Spellweaver …) |
+| Passive Tree | แบบ Path of Exile **1,002 โหนดต่อคลาส** (Minor 882 / Notable 91 / Keystone 14) จัดเป็นวงแหวนคลัสเตอร์ 5 ชั้น รูปคลาสตรงกลาง • 7 สาย: อาวุธ • ธาตุ • ความเร็ว • คริติคอล • ดูดเลือด • ป้องกัน • **สายประจำคลาส** พร้อม Keystone ที่เปลี่ยนวิธีเล่น • ซูม/ลากได้ |
 | Build | Reset Build ด้วยทองในเกม (ฟรีก่อน Lv20) • Build Preset 6 ช่อง ติดแท็ก PvE/PvP สลับได้นอกการต่อสู้ |
 | โลก | 5 เมืองหลัก (96×72 ช่อง) • 30 แมพฟาร์มขนาด 240×180 ช่อง (Lv 1–300) • ประตูวาร์ปเชื่อมแมพ • มอนสเตอร์ 90 ชนิด + Elite • บอสแมพทุกแมพ • บอสโลก 3 ตัวเกิดตามเวลา |
 | ดันเจี้ยน | Story (1–4) 5 แห่ง • Abyss (1–4) ชั้นไม่สิ้นสุด สุ่ม Modifier • Boss Hunt (1–4) เลือกบอสได้ 13 ตัว • Raid (4–8) 2 แห่ง • Guild Boss |
@@ -72,8 +72,9 @@ npm test             # integration test แบบ headless (เล่นวน�
 ```
 shared/      โค้ด/ข้อมูลที่ใช้ร่วมกันทั้ง Browser และ Server (ES Modules)
   constants.js  ค่าคงที่ เศรษฐกิจ PvP ธาตุ สถานะ
-  classes.js    นิยาม 10 คลาส (9 สายสกิล + 10 อัลติเมท + passive ประจำคลาส)
-  skills.js     ตัวสร้างสกิล (สาย × 10 variant) + resolveSkill() รวม rank/รูน/keystone/legendary
+  classes.js    นิยาม 10 คลาส (สเตต, พาเลตต์, passive ประจำคลาส)
+  classkits.js  ชุดสกิลของแต่ละคลาส: 9 สาย × 10 สกิล + อัลติเมท 10 + Class Trait
+  skills.js     ตัวสร้าง 1,000 สกิลจาก classkits + ตัวปรับแต่ง (applyMods) + resolveSkill() รวม rank/รูน/keystone/legendary
   runes.js      Support Runes (แต่ละอันคือฟังก์ชันแปลง spec ของสกิล)
   passives.js   Passive Tree แบบ data-driven
   items.js      ฐานไอเทม affix legendary mythic set วัตถุดิบ
@@ -97,6 +98,14 @@ client/      index.html + js/ (main, render, sprites, ui)
 หลักการสำคัญ: Browser ส่งแค่ **input** (ทิศทาง, ร่ายสกิลช่องไหน, หลบ, เก็บของ) — เซิร์ฟเวอร์เป็นผู้ตัดสินตำแหน่ง ดาเมจ คูลดาวน์ ทรัพยากร ดรอป และการซื้อขายทั้งหมด
 Snapshot ส่ง 10 ครั้ง/วินาที เฉพาะสิ่งที่อยู่ในรัศมีมองเห็น (interest management) และ projectile ถูกจำลองฝั่ง client เพื่อลด bandwidth
 
+## VFX (วาดด้วยโค้ดทั้งหมด)
+`client/js/fx2.js` — เอนจินอนุภาคแบบ pixel art: ระเบิด (มีเมฆเห็ดเมื่อรัศมีใหญ่), Implosion, วงแหวนไฟ, เสาไฟ, เปลวไฟ/ถ่านไฟ, พายุน้ำแข็ง, ผลึกแช่แข็ง, สายฟ้าแตกกิ่ง (midpoint displacement + กะพริบ), ลำแสงศักดิ์สิทธิ์, น้ำพุ/ละอองน้ำ, ควันพิษ, เงามืด, วงเวทอาร์เคน, Hex Force Field, Disintegrate, Shatter, Respawn Beam, Soul Rise • มีแสงเรืองแบบ additive และ gradient สีต่อธาตุ
+
+## สมดุลเกม
+`node tools/balance.js` แสดงรายงาน: จำนวนตีต่อมอนสเตอร์ (~2.5–4.8 ครั้งทุกเลเวล), เวลารอดเมื่อสู้ 3 ตัว, เวลาฆ่าบอสสนาม (15–53 วินาที), ดาเมจท่าใหญ่ของบอส (10–18% HP)
+
+> หมายเหตุ: ID สกิลและโหนด Passive เปลี่ยนในเวอร์ชันนี้ ตัวละครเก่าจะต้องใส่สกิลใน Hotbar และลงแต้ม Passive ใหม่
+
 ## UI
 
 - ทุกตัวเลือกเป็นไอคอน (ไม่มี dropdown): ช่องอุปกรณ์ ชนิดอาวุธ ตัวเร่ง เซ็ต รูน บอส มอนสเตอร์ แมพ ตรากิลด์ ช่องแชท
@@ -106,7 +115,7 @@ Snapshot ส่ง 10 ครั้ง/วินาที เฉพาะสิ�
 
 ## การต่อยอด
 
-- **เพิ่มคลาส**: เพิ่ม object ใน `CLASSES` (`shared/classes.js`) — 9 schools + 10 ultimates + passives แล้วเพิ่มอาวุธใน `WEAPON_TYPES` ระบบจะสร้าง 100 สกิลให้อัตโนมัติ (ถ้าต้องการชุดหัว pixel art ใหม่ เพิ่มใน `HEAD` ที่ `client/js/sprites.js`)
+- **เพิ่มคลาส**: เพิ่ม object ใน `CLASSES` (`shared/classes.js`) และชุดสกิลใน `KITS` + `TRAITS` (`shared/classkits.js`) รูปแบบบรรทัด `"ชื่อ|กลไก|ตัวปรับ|ธาตุ"` แล้วรัน `node tools/skillcheck.js` เพื่อยืนยันว่าไม่ซ้ำ
 - **เพิ่มกลไกสกิล**: เพิ่ม `S(...)` ใน `shared/signatures.js` (+ ตัวทำงานพิเศษใน `server/sigexec.js` และสไตล์ VFX ใน `client/js/vfx.js` ถ้าต้องการ) คลาสจะเลือกไปใช้ตามความถนัดเอง
 - **เพิ่มรูน**: เพิ่ม object ใน `RUNES` พร้อม `apply(spec)` — สกิลเดิมไม่ต้องแก้
 - **เพิ่มโหนด Passive**: ต่อท้าย chain ใน `BRANCHES` หรือเพิ่ม branch ใหม่ — ID เดิมไม่เปลี่ยน save เดิมใช้ได้ (โหนดที่ถูกลบจะถูกล้างอัตโนมัติ)

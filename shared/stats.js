@@ -77,8 +77,8 @@ export function computeStats(char, opts = {}) {
 }
 
 export function monsterStats(lv, tpl, mul = {}) {
-  const hp = (60 + lv * 28 + Math.pow(lv, 1.7) * 0.9) * (tpl.hp || 1) * (mul.hp || 1);
-  const dmg = (8 + lv * 3.4 + Math.pow(lv, 1.5) * 0.12) * (tpl.dmg || 1) * (mul.dmg || 1);
+  const hp = (60 + lv * 28 + Math.pow(lv, 1.7) * 0.5) * (tpl.hp || 1) * (mul.hp || 1);
+  const dmg = (7 + lv * 2.7 + Math.pow(lv, 1.5) * 0.05) * (tpl.dmg || 1) * (mul.dmg || 1);
   return {
     level: lv, hpMax: Math.round(hp), atk: Math.round(dmg), armor: Math.round(lv * 4 * (mul.armor || 1)), crit: 5, critDmg: 50,
     move: (tpl.spd || 90) * (mul.spd || 1), res: Object.fromEntries(ELEMENTS.map((e) => [e, e === tpl.el ? 25 : (mul.res || 0)])), pen: {},
