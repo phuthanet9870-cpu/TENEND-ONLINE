@@ -42,7 +42,8 @@ const me = (st) => st.snap?.u.find((u) => u[0] === st.you);
   const t0 = Date.now();
   const { getMapLayout } = await import('../shared/mapgen.js');
   const ex = getMapLayout(c.st.enter.key).exits.find((e) => e.side === 'e');
-  while (c.st.enter.kind === 'town' && Date.now() - t0 < 20000) { const m0 = me(c.st); if (m0) { const dx = ex.x - m0[1], dy = ex.y - m0[2], l = Math.hypot(dx, dy) || 1; c.send({ t: 'input', mx: dx / l, my: Math.abs(dy) > 8 ? dy / l : 0 }); } await sleep(100); }
+  let startX = null;
+  while (c.st.enter.kind === 'town' && Date.now() - t0 < 30000) { const m0 = me(c.st); if (m0) { if (startX == null) startX = m0[1]; const dy = ex.y - m0[2]; if (m0[1] < startX + 140) c.send({ t: 'input', mx: 1, my: 0 }); else if (Math.abs(dy) > 10) c.send({ t: 'input', mx: 0, my: Math.sign(dy) }); else c.send({ t: 'input', mx: 1, my: 0 }); } await sleep(100); }
   c.send({ t: 'input', mx: 0, my: 0 });
   if (c.st.enter.kind !== 'field') fail('could not walk to field');
   console.log('OK walked into field ->', c.st.enter.name);
@@ -159,6 +160,25 @@ const me = (st) => st.snap?.u.find((u) => u[0] === st.you);
   await sleep(1200); c.send({ t: 'market', op: 'list', idx: c.st.char.inv.length - 1, price: 1234 }); await sleep(1300);
   if (!c.st.other.market || !c.st.other.market.list.length) fail('market listing failed: ' + c.st.msgs.slice(-2));
   console.log('OK craft/refine/market — listings:', c.st.other.market.list.length, 'weapon +' + (c.st.char.equip.weapon.refine || 0));
+  // ---- GM system ----
+  c.send({ t: 'gm', op: 'state' }); await sleep(300);
+  if (!c.st.other.gmState) fail('first account should be GM');
+  c.send({ t: 'gm', op: 'spawn', tpl: 'aurelia_1_slime', n: 5 }); c.send({ t: 'gm', op: 'rates', exp: 2, drop: 3, gold: 2 });
+  c.send({ t: 'gm', op: 'player', action: 'item', slot: 'all', rarity: 'mythic' }); c.send({ t: 'gm', op: 'self', god: true, speed: 2 }); await sleep(1300);
+  c.send({ t: 'gm', op: 'state' }); await sleep(300);
+  const g = c.st.other.gmState;
+  if (g.rates.exp !== 2 || !g.self.god || !g.log.length) fail('gm ops not applied ' + JSON.stringify(g.rates));
+  const c2 = client(); await c2.open; c2.send({ t: 'register', user: 'normal', pass: 'pass1234' }); await sleep(300);
+  c2.send({ t: 'createChar', name: 'Normie', classId: 'monk' }); await sleep(300); c2.send({ t: 'selectChar', id: c2.st.chars[0].id }); await sleep(500);
+  c2.send({ t: 'gm', op: 'rates', exp: 99 }); await sleep(300);
+  if (!c2.st.msgs.some((x) => x.includes('ไม่มีสิทธิ์ GM'))) fail('non-GM was not rejected');
+  c.send({ t: 'gm', op: 'player', name: 'Normie', action: 'mute', n: 5 }); await sleep(200);
+  c2.send({ t: 'chat', ch: 'world', text: 'hi' }); await sleep(300);
+  if (!c2.st.msgs.some((x) => x.includes('ห้ามแชท'))) fail('mute not enforced');
+  c.send({ t: 'gm', op: 'ban', name: 'normal', reason: 'test' }); await sleep(300);
+  const c3 = client(); await c3.open; c3.send({ t: 'login', user: 'normal', pass: 'pass1234' }); await sleep(300);
+  if (!c3.st.msgs.some((x) => x.includes('ระงับ'))) fail('ban not enforced');
+  console.log('OK GM: spawn/rates/items/god/mute/ban, non-GM rejected • log entries', g.log.length);
   if (srvErr.includes('Error')) fail('server errors logged');
   srv.kill(); console.log('SELFTEST PASSED'); process.exit(0);
 })().catch((e) => fail(e.stack));

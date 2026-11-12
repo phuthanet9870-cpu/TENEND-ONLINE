@@ -21,7 +21,9 @@ export function chat(game, sess, m) {
   sess.lastChat = now;
   const text = clean(m.text); if (!text) return;
   const c = sess.char;
-  const out = { t: 'chat', ch: m.ch, from: c.name, text, cls: c.classId };
+  const mu = db.accounts[sess.acc]?.mutedUntil || 0;
+  if (mu > now) return game.err(sess, `คุณถูกห้ามแชทอีก ${Math.ceil((mu - now) / 60000)} นาที`);
+  const out = { t: 'chat', ch: m.ch, from: (sess.isGM ? '[GM] ' : '') + c.name, text, cls: c.classId, gm: sess.isGM ? 1 : 0 };
   switch (m.ch) {
     case 'world': return game.broadcast(out);
     case 'party': { const p = partyOf(game, sess); if (!p) return game.err(sess, 'คุณไม่มีปาร์ตี้'); return game.broadcast(out, (s) => p.members.includes(s.char.id)); }

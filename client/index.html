@@ -38,38 +38,56 @@ h3,h4 { margin:8px 0 4px; } h4 { color:var(--gold); }
 canvas.spr { image-rendering:pixelated; }
 /* HUD */
 #hud { display:none; }
-#topleft { position:fixed; top:10px; left:10px; background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:8px 12px; min-width:260px; z-index:5; }
-#pname { font-weight:600; } #pname small { color:var(--dim); font-weight:300; }
-#gold { color:var(--gold); font-size:12px; margin-top:2px; } #pots { font-size:12px; margin-top:2px; } #dodgecd { font-size:11px; color:var(--acc); }
-#statuses span { display:inline-block; font-size:10px; padding:1px 3px; margin:2px 2px 0 0; border-radius:3px; color:#000; }
-#topright { position:fixed; top:10px; right:10px; z-index:5; text-align:right; }
-#minimap { width:210px; height:160px; border:2px solid var(--line); border-radius:6px; background:#000; image-rendering:pixelated; display:block; margin-left:auto; }
-#zone { font-size:12px; color:var(--gold); margin:4px 0; }
-#menu { display:grid; grid-template-columns:repeat(6,34px); gap:3px; justify-content:end; }
-#menu button { padding:4px 0; font-size:15px; width:34px; }
-#bottom { position:fixed; bottom:8px; left:50%; transform:translateX(-50%); z-index:5; text-align:center; }
-.bar { position:relative; height:16px; background:#000; border:1px solid #333; border-radius:3px; overflow:hidden; margin:2px 0; }
-.bar i { position:absolute; left:0; top:0; bottom:0; transition:width .15s; } .bar b { position:absolute; left:0; top:0; height:5px; background:#a0e0ff; }
-.bar span { position:relative; font-size:11px; line-height:16px; text-shadow:1px 1px 0 #000; }
-#hpbar i { background:linear-gradient(#e84a4a,#8a1a1a); } #mpbar i { background:linear-gradient(#4a8ae8,#1a3a8a); } #expbar { height:8px; } #expbar i { background:linear-gradient(#e8d84a,#8a6a1a); } #expbar span { font-size:8px; line-height:8px; }
+.frame { background:var(--panel); border:1px solid var(--line); border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,.4); }
+#playerframe { position:fixed; top:10px; left:10px; display:flex; gap:8px; padding:8px 10px; width:300px; z-index:5; }
+#portrait { image-rendering:pixelated; background:radial-gradient(circle,#2a2440,#120f1c); border:1px solid var(--line); border-radius:6px; flex:none; }
+.pf-body { flex:1; min-width:0; }
+#pname { font-weight:600; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; } #pname small { color:var(--dim); font-weight:300; }
+#gold { color:var(--gold); font-size:12px; margin-top:3px; }
+#statuses { min-height:4px; } #statuses span { display:inline-block; font-size:10px; padding:1px 4px; margin:3px 3px 0 0; border-radius:3px; color:#000; font-weight:600; }
+.bar { position:relative; height:16px; background:#000; border:1px solid #333; border-radius:3px; overflow:hidden; margin:3px 0; }
+.bar i { position:absolute; left:0; top:0; bottom:0; transition:width .15s; } .bar b { position:absolute; left:0; top:0; height:4px; background:#a0e0ff; }
+.bar span { position:absolute; right:5px; font-size:11px; line-height:16px; text-shadow:1px 1px 0 #000; } .bar label { position:absolute; left:5px; font-size:10px; line-height:16px; font-weight:600; text-shadow:1px 1px 0 #000; opacity:.9; }
+.bar.hp i { background:linear-gradient(#e84a4a,#8a1a1a); } .bar.mp i { background:linear-gradient(#4a8ae8,#1a3a8a); } .bar.xp { height:12px; } .bar.xp i { background:linear-gradient(#e8d84a,#8a6a1a); } .bar.xp span,.bar.xp label { line-height:12px; font-size:9px; }
 .ginfo .bar i { background:linear-gradient(#e8d84a,#8a6a1a); }
-.bars2 { display:flex; gap:6px; } .bars2 .bar { width:240px; }
-#skillbar { display:flex; gap:5px; justify-content:center; margin:4px 0; }
-.slot { position:relative; width:52px; height:52px; background:#0e0c16; border:2px solid #4a3f6a; border-radius:6px; cursor:pointer; overflow:hidden; }
-.slot.ult { border-color:var(--gold); width:58px; height:58px; margin-top:-6px; }
-.slot.nomp .sk { filter:grayscale(1) brightness(.5); }
-.slot .cd { position:absolute; left:0; right:0; bottom:0; background:rgba(0,0,0,.72); }
-.slot .cdt { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-weight:600; font-size:15px; text-shadow:1px 1px 0 #000; }
-.slot kbd { position:absolute; top:1px; left:3px; font-size:10px; color:#fff; text-shadow:1px 1px 0 #000; font-family:inherit; }
-.sk { width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:24px; color:#fff; background:radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--c) 80%, white), var(--c) 45%, color-mix(in srgb, var(--c) 40%, black)); text-shadow:0 0 4px #000, 1px 1px 0 #000; border-radius:4px; }
-.sk.u { box-shadow:inset 0 0 0 2px var(--gold); } .sk.big { width:56px; height:56px; font-size:30px; flex:none; }
-#party { position:fixed; left:10px; top:150px; z-index:5; width:180px; } .pm { background:var(--panel); border:1px solid var(--line); border-radius:4px; padding:4px 6px; margin-bottom:4px; font-size:12px; } .pm.off { opacity:.5; }
+#targetframe { position:fixed; top:10px; left:330px; width:260px; padding:6px 10px; z-index:5; } #targetframe[hidden] { display:none; } #tf-name { font-weight:600; font-size:13px; } #tf-tags { font-size:11px; color:var(--dim); }
+#bossbar { display:none; position:fixed; top:12px; left:50%; transform:translateX(-50%); width:min(520px,40vw); z-index:6; } #bossbar .bar { height:22px; border:2px solid #8a2a1a; } #bossbar i { background:linear-gradient(#ff4a2a,#8a0a0a); } #bossbar span { left:0; right:0; text-align:center; font-weight:600; line-height:22px; font-size:13px; }
+#minibox { position:fixed; top:10px; right:10px; padding:6px; z-index:5; width:234px; }
+.mb-head { display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px; } #zone { color:var(--gold); } #coords { color:var(--dim); font-variant-numeric:tabular-nums; }
+#minimap { width:220px; height:170px; border:1px solid var(--line); border-radius:4px; display:block; cursor:pointer; image-rendering:pixelated; }
+.mb-btns { display:flex; gap:4px; margin-top:4px; } .mb-btns button:last-child { flex:1; }
+#tracker { position:fixed; top:250px; right:10px; width:234px; padding:8px 10px; z-index:5; font-size:12px; max-height:36vh; overflow:auto; } #tracker:empty,#tracker.empty { display:none; }
+#tracker h5 { margin:0 0 4px; color:var(--gold); font-size:12px; } .qt { margin-bottom:4px; } .qt .mbar { height:4px; } .qt.done { color:#5aff7a; }
+#objective:not(:empty) { border-bottom:1px solid var(--line); padding-bottom:6px; margin-bottom:6px; }
+#party { position:fixed; left:10px; top:140px; z-index:5; width:200px; } .pm { background:var(--panel); border:1px solid var(--line); border-radius:4px; padding:4px 6px; margin-bottom:4px; font-size:12px; } .pm.off { opacity:.5; }
 .mbar { height:5px; background:#300; margin-top:2px; } .mbar i { display:block; height:100%; background:#4ad86a; }
-#bossbar { display:none; position:fixed; top:12px; left:50%; transform:translateX(-50%); width:520px; z-index:6; } #bossbar .bar { height:22px; border:2px solid #8a2a1a; } #bossbar i { background:linear-gradient(#ff4a2a,#8a0a0a); } #bossbar span { font-weight:600; line-height:22px; font-size:13px; }
-#objective { display:none; position:fixed; right:10px; top:300px; width:230px; background:var(--panel); border:1px solid var(--gold); border-radius:6px; padding:8px 10px; font-size:12px; z-index:5; }
-#chat { position:fixed; left:10px; bottom:10px; width:420px; z-index:6; }
-#chat-log { height:160px; overflow-y:auto; background:rgba(0,0,0,.45); border-radius:6px 6px 0 0; padding:6px; font-size:12px; line-height:1.35; }
-#chat-row { display:flex; } #chat-row select { width:90px; border-radius:0 0 0 6px; } #chat-input { flex:1; border-radius:0 0 6px 0; }
+#leave-btn { display:none; position:fixed; right:10px; bottom:200px; z-index:6; }
+/* action bar */
+#actionbar { position:fixed; bottom:8px; left:50%; transform:translateX(-50%); z-index:5; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:6px 8px; }
+.ab-top { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:4px; font-size:11px; }
+.ab-main { display:flex; gap:8px; align-items:flex-end; }
+#hotbar { display:grid; grid-template-columns:repeat(10,44px); gap:4px; }
+#hotbar.collapsed .slot.r1,#hotbar.collapsed .slot.r2 { display:none; }
+.slot { position:relative; width:44px; height:44px; background:#0e0c16; border:2px solid #4a3f6a; border-radius:6px; cursor:pointer; overflow:hidden; }
+.slot.drop { border-color:var(--acc); box-shadow:0 0 8px var(--acc); }
+.slot.ult { border-color:var(--gold); width:58px; height:58px; }
+.slot.nomp .sk { filter:grayscale(1) brightness(.5); }
+.slot .cd { position:absolute; left:0; right:0; bottom:0; background:rgba(0,0,0,.72); pointer-events:none; }
+.slot .cdt { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-weight:600; font-size:14px; text-shadow:1px 1px 0 #000; pointer-events:none; }
+.slot kbd { position:absolute; top:0; left:2px; font-size:9px; color:#fff; text-shadow:1px 1px 0 #000; font-family:inherit; pointer-events:none; }
+.ab-side { display:flex; gap:6px; align-items:flex-end; }
+.util { display:grid; grid-template-columns:repeat(3,40px); gap:4px; }
+.ut { position:relative; width:40px; height:40px; background:#1a1628; border:1px solid var(--line); border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:17px; cursor:pointer; }
+.ut small { position:absolute; bottom:0; right:2px; font-size:10px; color:#fff; text-shadow:1px 1px 0 #000; } .ut kbd { position:absolute; top:0; left:2px; font-size:8px; font-family:inherit; color:var(--dim); }
+.ut.auto { font-size:10px; font-weight:600; color:var(--dim); } .ut.auto.on { background:#1f5a2a; border-color:#5aff7a; color:#5aff7a; box-shadow:0 0 10px rgba(90,255,122,.5); }
+.sk { width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:21px; color:#fff; background:radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--c) 80%, white), var(--c) 45%, color-mix(in srgb, var(--c) 40%, black)); text-shadow:0 0 4px #000, 1px 1px 0 #000; border-radius:4px; }
+.sk.u { box-shadow:inset 0 0 0 2px var(--gold); } .sk.big { width:56px; height:56px; font-size:30px; flex:none; }
+#menubar { position:fixed; right:10px; bottom:8px; z-index:5; display:grid; grid-template-columns:repeat(5,52px); gap:3px; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:5px; }
+#menubar button { position:relative; padding:2px 0 3px; font-size:10px; display:flex; flex-direction:column; align-items:center; background:#2a2440; border-color:#4a3f6a; } #menubar button i { font-style:normal; font-size:17px; } #menubar button kbd { position:absolute; top:0; right:2px; font-size:8px; color:var(--dim); font-family:inherit; } #menubar [hidden] { display:none; }
+#chat { position:fixed; left:10px; bottom:8px; width:380px; z-index:6; }
+.chat-tabs { display:flex; gap:2px; } .chat-tabs button { padding:2px 8px; font-size:11px; border-radius:6px 6px 0 0; background:#2a2440; border-color:#4a3f6a; } .chat-tabs button.on { background:#5a3fa8; }
+#chat-log { height:140px; overflow-y:auto; background:rgba(0,0,0,.5); padding:6px; font-size:12px; line-height:1.35; }
+#chat-row { display:flex; } #chat-row select { width:80px; border-radius:0 0 0 6px; } #chat-input { flex:1; border-radius:0 0 6px 0; min-width:0; }
 #toasts { position:fixed; top:110px; left:50%; transform:translateX(-50%); z-index:30; text-align:center; pointer-events:none; }
 .toast { font-size:17px; font-weight:600; text-shadow:2px 2px 0 #000,0 0 8px #000; margin:4px; animation:fadein .3s; }
 @keyframes fadein { from { opacity:0; transform:translateY(-8px); } }
@@ -78,8 +96,14 @@ canvas.spr { image-rendering:pixelated; }
 #banner.show { animation:banner 3s; } @keyframes banner { 0%{opacity:0} 15%{opacity:1} 75%{opacity:1} 100%{opacity:0} }
 #respawn { display:none; position:fixed; inset:0; z-index:20; align-items:center; justify-content:center; flex-direction:column; pointer-events:none; }
 #respawn h1 { font-family:'Press Start 2P'; color:#ff4a4a; text-shadow:3px 3px 0 #000; } #respawn button { pointer-events:auto; }
-#leave-btn { display:none; position:fixed; right:10px; top:470px; z-index:6; }
 #conn { position:fixed; inset:0; background:rgba(0,0,0,.8); z-index:100; display:none; align-items:center; justify-content:center; font-size:20px; }
+.help-bar { background:#1a2440; border:1px solid #3a5a8a; border-radius:6px; padding:6px 10px; font-size:12px; color:#c8dcff; margin-bottom:8px; line-height:1.5; }
+.slotpick { display:grid; grid-template-columns:repeat(10,30px); gap:3px; margin:6px 0; } .slotpick div { height:30px; border:1px solid #4a3f6a; border-radius:4px; font-size:10px; display:flex; align-items:center; justify-content:center; cursor:pointer; background:#0e0c16; color:var(--dim); } .slotpick div.used { background:#2a2440; color:#fff; } .slotpick div.me { border-color:var(--gold); color:var(--gold); } .slotpick div:hover { border-color:var(--acc); }
+canvas#bigmap { display:block; border:1px solid var(--line); border-radius:6px; cursor:crosshair; max-width:100%; }
+.ord { display:flex; align-items:center; gap:6px; padding:3px; border-bottom:1px solid #221c34; } .ord .sk { width:28px; height:28px; font-size:14px; flex:none; } .ord span { flex:1; } .ord.off { opacity:.4; }
+.gm-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; } .gm-card { background:#1a1628; border:1px solid var(--line); border-radius:6px; padding:8px; } .gm-card h4 { margin-top:0; }
+.modal { position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:500; display:flex; align-items:center; justify-content:center; } .modal-box { background:var(--panel); border:2px solid var(--gold); border-radius:8px; padding:16px; width:min(380px,90vw); } .modal-box input,.modal-box select { width:100%; }
+.toggle { display:inline-flex; gap:6px; align-items:center; cursor:pointer; }
 /* windows */
 .win { position:fixed; background:var(--panel); border:2px solid var(--line); border-radius:8px; z-index:100; max-height:86vh; display:flex; flex-direction:column; box-shadow:0 10px 40px rgba(0,0,0,.6); }
 .wt { display:flex; justify-content:space-between; align-items:center; padding:6px 10px; background:linear-gradient(#3a2f5a,#241e38); border-radius:6px 6px 0 0; cursor:move; font-weight:600; color:var(--gold); }
@@ -125,24 +149,48 @@ canvas#treecv { background:#0d0b16; border:1px solid var(--line); border-radius:
 <div id="login" class="screen"></div>
 <div id="charsel" class="screen"></div>
 <div id="hud">
-  <div id="topleft"><div id="pname"></div><div id="gold"></div><div id="pots"></div><div id="dodgecd"></div><div id="statuses"></div></div>
-  <div id="topright"><canvas id="minimap" width="210" height="160"></canvas><div id="zone"></div>
-    <div id="menu">
-      <button title="กระเป๋า [I]" data-act="menu" data-p="inventory">🎒</button><button title="ตัวละคร [C]" data-act="menu" data-p="character">🧍</button><button title="สกิล [K]" data-act="menu" data-p="skills">📘</button><button title="รูน [N]" data-act="menu" data-p="runes">💠</button><button title="Passive Tree [P]" data-act="menu" data-p="passives">🌳</button><button title="Build Presets [B]" data-act="menu" data-p="builds">📋</button>
-      <button title="เควสต์ [J]" data-act="menu" data-p="quests">📜</button><button title="ปาร์ตี้ [O]" data-act="menu" data-p="party">👥</button><button title="กิลด์ [G]" data-act="menu" data-p="guild">🏰</button><button title="PvP [V]" data-act="menu" data-p="pvp">⚔</button><button title="แผนที่ [M]" data-act="menu" data-p="worldmap">🗺</button><button title="ช่วยเหลือ [H]" data-act="menu" data-p="help">❔</button>
+  <!-- player frame: who you are + HP / resource / EXP -->
+  <div id="playerframe" class="frame">
+    <canvas id="portrait" width="44" height="64"></canvas>
+    <div class="pf-body">
+      <div id="pname"></div>
+      <div id="hpbar" class="bar hp" title="พลังชีวิต (HP) — หมดแล้วตาย • Q = ยาฟื้น HP"><i></i><b></b><label>HP</label><span></span></div>
+      <div id="mpbar" class="bar mp" title="ทรัพยากรสำหรับใช้สกิล • T = ยาฟื้นทรัพยากร"><i></i><label id="mplabel">MP</label><span></span></div>
+      <div id="expbar" class="bar xp" title="ค่าประสบการณ์ เต็มแล้วเลเวลอัป"><i></i><label>EXP</label><span></span></div>
+      <div id="gold"></div>
+      <div id="statuses"></div>
     </div>
-    <button class="alt mini" style="margin-top:4px" data-act="logout">เปลี่ยนตัวละคร</button>
   </div>
-  <div id="party"></div>
+  <!-- current target -->
+  <div id="targetframe" class="frame" hidden><div id="tf-name"></div><div class="bar hp"><i></i><span></span></div><div id="tf-tags"></div></div>
   <div id="bossbar"><div class="bar"><i></i><span></span></div></div>
-  <div id="objective"></div>
-  <button id="leave-btn" class="alt" data-act="leaveInst">ออกจากดันเจี้ยน</button>
-  <div id="bottom">
-    <div id="skillbar"></div>
-    <div class="bars2"><div id="hpbar" class="bar"><i></i><b></b><span></span></div><div id="mpbar" class="bar"><i></i><span></span></div></div>
-    <div id="expbar" class="bar"><i></i><span></span></div>
+  <!-- minimap: click to walk there -->
+  <div id="minibox" class="frame">
+    <div class="mb-head"><b id="zone"></b><span id="coords"></span></div>
+    <canvas id="minimap" width="220" height="170" title="คลิกเพื่อเดินไปจุดนั้น"></canvas>
+    <div class="mb-btns"><button class="mini alt" data-act="miniZoom" data-z="-1" title="ซูมเข้า">＋</button><button class="mini alt" data-act="miniZoom" data-z="1" title="ซูมออก">－</button><button class="mini" data-act="menu" data-p="map">🗺 แผนที่ [M]</button></div>
   </div>
-  <div id="chat"><div id="chat-log"></div><div id="chat-row"><select id="chat-ch"><option value="say">พูด</option><option value="world">โลก</option><option value="party">ปาร์ตี้</option><option value="guild">กิลด์</option></select><input id="chat-input" placeholder="Enter เพื่อแชท • /w ชื่อ ข้อความ" maxlength="200"></div></div>
+  <div id="tracker" class="frame"><div id="objective"></div><div id="qtrack"></div></div>
+  <div id="party"></div>
+  <button id="leave-btn" class="alt" data-act="leaveInst">ออกจากดันเจี้ยน</button>
+  <!-- action bar: 3 rows x 10 skills + ultimate + utility -->
+  <div id="actionbar">
+    <div class="ab-top"><span class="dim" id="ab-hint">ลากสกิลจากหน้าต่างสกิล [K] มาวาง • คลิกขวาที่ช่องเพื่อถอด</span><button class="mini alt" id="ab-toggle" data-act="hotbarToggle" title="ย่อ/ขยาย hotbar">▼ ย่อ</button></div>
+    <div class="ab-main"><div id="hotbar"></div>
+      <div class="ab-side">
+        <div class="slot ult" id="ultslot" data-slot="u"></div>
+        <div class="util"><div class="ut" id="ut-hp" data-act="pot" data-k="hp" title="ยาฟื้น HP [Q]">❤<small></small><kbd>Q</kbd></div><div class="ut" id="ut-mp" data-act="pot" data-k="mp" title="ยาฟื้นทรัพยากร [T]">💧<small></small><kbd>T</kbd></div>
+        <div class="ut" id="ut-dodge" title="หลบ: อมตะชั่วขณะ [Space]">💨<small></small><kbd>Spc</kbd></div><div class="ut" title="Counter/Parry: ใช้กับท่าสีทองของบอส [F]" data-act="counter">🛡<kbd>F</kbd></div>
+        <div class="ut auto" id="ut-auto" data-act="autoToggle" title="ระบบออโต้ [U] • ตั้งค่า [Y]">AUTO<kbd>U</kbd></div><div class="ut" data-act="menu" data-p="auto" title="ตั้งค่าออโต้ [Y]">⚙<kbd>Y</kbd></div></div>
+      </div>
+    </div>
+  </div>
+  <!-- main menu with labels -->
+  <div id="menubar">
+    <button data-act="menu" data-p="inventory"><i>🎒</i>กระเป๋า<kbd>I</kbd></button><button data-act="menu" data-p="character"><i>🧍</i>ตัวละคร<kbd>C</kbd></button><button data-act="menu" data-p="skills"><i>📘</i>สกิล<kbd>K</kbd></button><button data-act="menu" data-p="runes"><i>💠</i>รูน<kbd>N</kbd></button><button data-act="menu" data-p="passives"><i>🌳</i>Passive<kbd>P</kbd></button><button data-act="menu" data-p="builds"><i>📋</i>Build<kbd>B</kbd></button><button data-act="menu" data-p="quests"><i>📜</i>เควสต์<kbd>J</kbd></button>
+    <button data-act="menu" data-p="party"><i>👥</i>ปาร์ตี้<kbd>O</kbd></button><button data-act="menu" data-p="guild"><i>🏰</i>กิลด์<kbd>G</kbd></button><button data-act="menu" data-p="pvp"><i>⚔</i>PvP<kbd>V</kbd></button><button data-act="menu" data-p="map"><i>🗺</i>แผนที่<kbd>M</kbd></button><button data-act="menu" data-p="auto"><i>🤖</i>ออโต้<kbd>Y</kbd></button><button data-act="menu" data-p="help"><i>❔</i>วิธีเล่น<kbd>H</kbd></button><button id="gm-btn" data-act="menu" data-p="gm" hidden><i>👑</i>GM<kbd>F9</kbd></button><button data-act="logout"><i>🚪</i>ออก</button>
+  </div>
+  <div id="chat"><div class="chat-tabs" id="chat-tabs"></div><div id="chat-log"></div><div id="chat-row"><select id="chat-ch"><option value="say">พูด</option><option value="world">โลก</option><option value="party">ปาร์ตี้</option><option value="guild">กิลด์</option></select><input id="chat-input" placeholder="Enter เพื่อแชท • /w ชื่อ ข้อความ" maxlength="200"></div></div>
   <div id="respawn"><h1>คุณตายแล้ว</h1><div id="respawn-t"></div><button data-act="respawn">ฟื้นคืนชีพ</button></div>
 </div>
 <div id="banner"></div>

@@ -4,8 +4,9 @@ import { classSkills, getSkill, resolveSkill, BEHAVIOR, MAX_SKILL_RANK, runeSlot
 import { RUNES, RUNE_BY_ID, runeFits } from '/shared/runes.js';
 import { buildPassiveTree, passivePointsFor, spentPoints } from '/shared/passives.js';
 import { STAT_TH, SLOT_TH, LEGENDARIES, MYTHICS, SETS, MATERIALS, WEAPON_TYPES, REFINE_CHANCE, POTIONS, sellPrice } from '/shared/items.js';
-import { RARITY_INFO, ELEMENT_INFO, ECONOMY, PVP_MODES, GUILD_RANKS, expToNext, STATUS, STATUS_BITS, RARITIES } from '/shared/constants.js';
-import { MAPS, TOWNS, DUNGEONS, BOSSES, REGION_LIST, cardFor } from '/shared/world.js';
+import { RARITY_INFO, ELEMENT_INFO, ECONOMY, PVP_MODES, GUILD_RANKS, expToNext, STATUS, STATUS_BITS, RARITIES, HOTBAR_SIZE, TILE } from '/shared/constants.js';
+import { MAPS, TOWNS, DUNGEONS, BOSSES, REGION_LIST, cardFor, QUESTS, MONSTERS, WORLD_BOSSES } from '/shared/world.js';
+import { AUTO_DEFAULT } from './auto.js';
 import { computeStats } from '/shared/stats.js';
 import { charSprite, weaponSprite, drawEmblem } from './sprites.js';
 import { fmt } from './render.js';
@@ -15,6 +16,27 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
 const BEH_GLYPH = { melee: '⚔', projectile: '➶', nova: '✺', ground: '◎', beam: '═', dash: '»', leap: '⤒', summon: '☥', buff: '✚', chain: 'ϟ', trap: '⌖', orbit: '⟳', heal: '❤', barrage: '⁂', totem: '♜' };
 const SLOT_ICON = { weapon: '⚔', offhand: '🛡', helm: '⛑', chest: '🥋', gloves: '🧤', boots: '👢', belt: '➰', amulet: '📿', ring: '💍', ring1: '💍', ring2: '💍', card: '🃏' };
 const EQUIP_SLOTS = ['helm', 'amulet', 'weapon', 'chest', 'offhand', 'gloves', 'belt', 'ring1', 'ring2', 'boots'];
+const HELP = {
+  inventory: 'อุปกรณ์ที่สวมใส่อยู่ทางซ้าย ของในกระเป๋าทางขวา (60 ช่อง) คลิกไอเทมเพื่อดูคำสั่ง: สวมใส่ แยกชิ้นส่วน ขาย ฝากคลัง หรือวางขาย ไอเทมยิ่งสีหายากยิ่งดี: ขาว → ฟ้า → เหลือง → ม่วง → ส้ม → แดง',
+  character: 'สรุปค่าสถานะทั้งหมดที่ได้จากเลเวล อุปกรณ์ Passive และเซ็ต ใช้ดูว่า Build ของคุณแข็งแรงตรงไหน',
+  skills: 'แต่ละคลาสมี 100 สกิล (9 สาย × 10 + อัลติเมท 10) สกิลปลดล็อกตามเลเวล เลือกสกิลทางซ้าย แล้วคลิกช่องหรือลากไปวางที่ Hotbar ใช้แต้มสกิลเพื่อเพิ่ม Rank และฝังรูนเพื่อเปลี่ยนรูปแบบสกิล',
+  runes: 'Support Runes เปลี่ยนการทำงานของสกิล เช่น ยิงแตกเป็นหลายลูก กระโดดไปเป้าอื่น หรือกลายเป็นกับดัก ฝังที่หน้าสกิล [K] และนำ 3 รูนมาฟิวส์เป็นรูนระดับสูงขึ้นได้',
+  passives: 'ทุกเลเวลได้ 1 แต้ม ลงแต้มได้เฉพาะโหนดที่เชื่อมกับโหนดที่เปิดแล้ว (เริ่มจาก Origin ตรงกลาง) โหนดรูปเพชร ◆ คือ Keystone ที่เปลี่ยนวิธีเล่น',
+  builds: 'บันทึกชุดสกิล รูน และ Passive ไว้ 6 ชุด สลับได้ทันทีนอกการต่อสู้ เช่น ชุดฟาร์ม (PvE) กับชุดสู้คน (PvP) รีเซ็ตแต้มได้ด้วยทอง',
+  quests: 'รับเควสต์กำจัดมอนสเตอร์หรือบอสในภูมิภาคปัจจุบัน ความคืบหน้าแสดงที่มุมขวา เมื่อครบให้กลับมาส่งเพื่อรับ EXP ทอง และรูน',
+  party: 'รวมทีมสูงสุด 8 คน แบ่ง EXP กัน (ได้โบนัส +15% ต่อคน) และของดรอปแยกให้แต่ละคน หัวหน้าปาร์ตี้เป็นผู้เปิดดันเจี้ยน',
+  guild: 'กิลด์มีตำแหน่ง คลังร่วม (บันทึกการฝากถอนทุกครั้ง) สกิลกิลด์ เควสต์รายวัน Guild Boss และ Guild War 20v20',
+  pvp: 'PvP แยกจากการฟาร์ม ไม่มีใครฆ่าคุณในแมพปกติได้ Ranked จะปรับค่าอุปกรณ์ทุกคนให้เท่ากัน ผลแพ้ชนะจึงขึ้นกับ Build และฝีมือ',
+  dungeon: 'Story = เนื้อเรื่อง+บอส • Abyss = ชั้นสุ่มไม่สิ้นสุด • Boss Hunt = ตีบอสอย่างเดียว • Raid = 4-8 คน บอสหลายเฟส พื้นแดง = หลบ พื้นทอง = กด F Counter',
+  shop: 'ซื้อยาและรูนพื้นฐาน ขายของโดยคลิกไอเทมในกระเป๋าแล้วเลือก "ขาย"',
+  smith: 'คราฟต์ไอเทมจากวัตถุดิบ ตีบวก +1 ถึง +10 สุ่ม Affix ใหม่ เจาะช่อง Socket และซ่อมอุปกรณ์ (ความทนทานลดเมื่อตาย)',
+  stash: 'คลังของใช้ร่วมกันทุกตัวละครในบัญชีเดียวกัน 80 ช่อง',
+  market: 'ซื้อขายกับผู้เล่นอื่นผ่านเซิร์ฟเวอร์ ค่าวางขาย 1% และค่าธรรมเนียม 6% เมื่อขายได้',
+  teleport: 'วิธีเดียวที่วาร์ปข้ามแมพได้ทันที ไปเมืองหรือแมพฟาร์มที่เลเวลถึง จ่ายด้วยทอง (นอกนั้นต้องเดินผ่านประตูวาร์ป 🌀 ที่ขอบแผนที่)',
+  map: 'คลิกตรงไหนบนแผนที่ ตัวละครจะเดินไปเอง (วาร์ปไม่ได้) จุดสีฟ้า 🌀 คือประตูวาร์ปที่เชื่อมไปแมพถัดไป คลิกใกล้ประตูเพื่อเดินไปที่ประตู',
+  auto: 'ออโต้จะเดินหา ตี และเก็บของให้ตามที่ตั้งไว้ แท็บ "ลำดับสกิล" ใช้กำหนดว่าจะใช้สกิลไหนก่อนหลัง (ดึงจากสกิลที่ใส่ใน Hotbar) กด U เพื่อเปิด/ปิด',
+  gm: 'แผงควบคุมสำหรับผู้ดูแลเกม ทุกคำสั่งถูกบันทึกไว้ในแท็บ "บันทึก GM" และใช้ได้บนเซิร์ฟเวอร์ออนไลน์จริง',
+};
 const statLine = (k, v) => `${STAT_TH[k] || k} ${v >= 0 ? '+' : ''}${Math.round(v * 10) / 10}`;
 
 export class UI {
@@ -26,7 +48,34 @@ export class UI {
     document.addEventListener('mouseout', (e) => { if (e.target.closest?.('[data-tip]')) this.hideTip(); });
     document.addEventListener('mousemove', (e) => { if (this.tip.style.display === 'block') this.placeTip(e.clientX, e.clientY); });
     $('#chat-input').addEventListener('keydown', (e) => { if (e.code === 'Enter') { this.sendChat(); e.preventDefault(); } e.stopPropagation(); });
+    try { this.rows = +localStorage.getItem('tenend-hotbar-rows') || 3; } catch { this.rows = 3; }
+    this.chatTab = 'all';
+    $('#chat-tabs').innerHTML = Object.entries({ all: 'ทั้งหมด', world: 'โลก', party: 'ปาร์ตี้', guild: 'กิลด์', sys: 'ระบบ' }).map(([k, v]) => `<button class="${k === 'all' ? 'on' : ''}" data-act="chatTab" data-t="${k}">${v}</button>`).join('');
+    // minimap: click to walk
+    $('#minimap').addEventListener('mousedown', (e) => { const t = this.r.miniT; if (!t) return; const r = e.target.getBoundingClientRect(); const [wx, wy] = t.toWorld((e.clientX - r.left) * (e.target.width / r.width), (e.clientY - r.top) * (e.target.height / r.height)); this.G.walkTo(wx, wy); });
+    this.bindHotbarDnD();
     this.buildLogin();
+  }
+  // ---- drag & drop skills onto the 30-slot hotbar ----
+  bindHotbarDnD() {
+    document.addEventListener('dragstart', (e) => {
+      const row = e.target.closest?.('[data-drag-skill]'); const slot = e.target.closest?.('.slot[data-slot]');
+      if (row) e.dataTransfer.setData('text/plain', 'skill:' + row.dataset.dragSkill);
+      else if (slot) e.dataTransfer.setData('text/plain', 'slot:' + slot.dataset.slot);
+    });
+    document.addEventListener('dragover', (e) => { const sl = e.target.closest?.('.slot[data-slot]'); if (sl) { e.preventDefault(); sl.classList.add('drop'); } });
+    document.addEventListener('dragleave', (e) => { e.target.closest?.('.slot')?.classList.remove('drop'); });
+    document.addEventListener('drop', (e) => {
+      const data = e.dataTransfer.getData('text/plain'); const sl = e.target.closest?.('.slot[data-slot]'); document.querySelectorAll('.slot.drop').forEach((x) => x.classList.remove('drop'));
+      if (!data) return; const c = this.G.char; if (!c) return;
+      const [kind, v] = data.split(':'); const id = kind === 'skill' ? v : (v === 'u' ? c.build.ult : c.build.hotbar[+v]);
+      if (!sl) { if (kind === 'slot') { e.preventDefault(); this.send({ t: 'build', op: 'equipSkill', slot: v === 'u' ? 'u' : +v, id: null }); } return; }
+      e.preventDefault(); if (!id) return;
+      const to = sl.dataset.slot === 'u' ? 'u' : +sl.dataset.slot;
+      if (kind === 'slot' && to !== 'u' && v !== 'u') { const other = c.build.hotbar[to]; this.send({ t: 'build', op: 'equipSkill', slot: to, id }); if (!other) this.send({ t: 'build', op: 'equipSkill', slot: +v, id: null }); return; }
+      this.send({ t: 'build', op: 'equipSkill', slot: to, id });
+    });
+    document.addEventListener('contextmenu', (e) => { const sl = e.target.closest?.('.slot[data-slot]'); if (sl && this.G.char) { e.preventDefault(); this.send({ t: 'build', op: 'equipSkill', slot: sl.dataset.slot === 'u' ? 'u' : +sl.dataset.slot, id: null }); } });
   }
   // ---------------- screens ----------------
   onConnect() { $('#conn').style.display = 'none'; if (!this.G.char) this.showScreen('login'); }
@@ -36,7 +85,7 @@ export class UI {
     $('#login').innerHTML = `<div class="logo">TENEND<span>ONLINE</span></div><div class="sub">Online Action RPG • HTML5 • 10 Classes • 1000 Skills</div>
       <div class="box"><input id="lu" placeholder="ชื่อผู้ใช้" maxlength="20" autocomplete="username"><input id="lp" type="password" placeholder="รหัสผ่าน" maxlength="64" autocomplete="current-password">
       <div class="row"><button data-act="login">เข้าสู่ระบบ</button><button data-act="register" class="alt">สมัครสมาชิก</button></div><div id="lerr" class="err"></div></div>
-      <div class="foot">WASD เดิน • เมาส์เล็ง • 1-6 สกิล • R อัลติเมท • Space หลบ • F Counter • E คุย NPC • H ช่วยเหลือ</div>`;
+      <div class="foot">คลิกเพื่อเดิน / WASD • 1-0, Shift+1-0, Alt+1-0 = Hotbar 30 ช่อง • R อัลติเมท • Space หลบ • F Counter • U ออโต้ • H วิธีเล่น</div>`;
     $('#lp').addEventListener('keydown', (e) => { if (e.code === 'Enter') this.act('login'); });
   }
   buildCharSel(list) {
@@ -75,16 +124,22 @@ export class UI {
       case 'pvpStatus': this.ctx.pvpq = m.queues; this.renderPanel('pvp'); break;
       case 'quests': this.ctx.quests = m; this.renderPanel('quests'); break;
       case 'crafted': this.toast(`คราฟต์: ${m.item.name}`, RARITY_INFO[m.item.rarity].color); break;
+      case 'gmState': this.ctx.gm = m; this.renderPanel('gm'); break;
     }
   }
   onChar() {
     const c = this.G.char; if (!c) return;
     this.stats = computeStats(c);
-    this.renderSkillbar();
-    $('#pname').innerHTML = `${esc(c.name)} <small>Lv ${c.level}${c.mastery ? ` ✦${c.mastery}` : ''} ${CLASS_BY_ID[c.classId].name}</small>`;
-    $('#gold').textContent = `💰 ${fmt(c.gold)}  🏅 ${fmt(c.honor || 0)}`;
-    $('#pots').innerHTML = `<span title="Q">❤ ${c.potions.hp || 0}</span> <span title="T">💧 ${c.potions.mp || 0}</span>`;
-    this.renderParty();
+    this.G.auto.refreshSpecs(this.stats);
+    this.renderHotbar();
+    const cls = CLASS_BY_ID[c.classId];
+    $('#pname').innerHTML = `${c.gm ? '<span style="color:var(--gold)">[GM]</span> ' : ''}${esc(c.name)} <small>Lv ${c.level}${c.mastery ? ` ✦${c.mastery}` : ''} • ${cls.th}</small>`;
+    $('#mplabel').textContent = cls.resource.name;
+    $('#gold').innerHTML = `💰 ${fmt(c.gold)} ทอง • 🏅 ${fmt(c.honor || 0)} Honor`;
+    $('#ut-hp small').textContent = c.potions.hp || 0; $('#ut-mp small').textContent = c.potions.mp || 0;
+    $('#gm-btn').hidden = !c.gm;
+    const pc = $('#portrait').getContext('2d'); pc.imageSmoothingEnabled = false; pc.clearRect(0, 0, 44, 64); pc.drawImage(charSprite(cls.id, cls.palette, 0), 4, 2, 36, 60);
+    this.renderParty(); this.renderTracker(); this.renderAutoBtn();
     for (const p of this.open) this.renderPanel(p);
   }
   onSnap(m) {
@@ -99,13 +154,20 @@ export class UI {
     const boss = o.boss;
     $('#bossbar').style.display = boss ? 'block' : 'none';
     if (boss) { $('#bossbar i').style.width = `${boss.hp / 10}%`; $('#bossbar span').textContent = `${boss.world ? '🐉 ' : ''}${boss.n} — ${(boss.hp / 10).toFixed(1)}%`; }
-    $('#objective').innerHTML = this.objectiveHtml(o); $('#objective').style.display = $('#objective').innerHTML ? 'block' : 'none';
+    $('#objective').innerHTML = this.objectiveHtml(o);
+    $('#tracker').classList.toggle('empty', !$('#objective').innerHTML && !$('#qtrack').innerHTML);
+    // target frame
+    const t = this.G.auto.target && this.G.units.get(this.G.auto.target);
+    $('#targetframe').hidden = !t;
+    if (t) { const m = t.meta || {}; $('#tf-name').innerHTML = `${m.b ? '👑 ' : m.e ? '★ ' : ''}${esc(m.n)} <small class="dim">Lv ${m.lv ?? '?'}</small>`; $('#targetframe .bar i').style.width = `${t.hp / 10}%`; $('#targetframe .bar span').textContent = `${(t.hp / 10).toFixed(0)}%`; $('#tf-tags').textContent = `${m.b ? 'บอส • ' : m.e ? 'Elite • ' : ''}${m.k === 'monster' ? 'มอนสเตอร์' : m.k === 'player' || m.k === 'bot' ? 'ผู้เล่นฝั่งตรงข้าม' : ''}${this.G.auto.on ? ' • ออโต้กำลังโจมตี' : ' • กำลังโจมตี (คลิกพื้นเพื่อยกเลิก)'}`; }
+    const meu = this.G.units.get(this.G.you); if (meu) $('#coords').textContent = `${Math.floor(meu.x / TILE)}, ${Math.floor(meu.y / TILE)}`;
     const u = this.G.units.get(this.G.you);
     if (u) {
       const st = []; for (let i = 0; i < STATUS_BITS.length; i++) if (u.flags & (1 << i)) st.push(`<span style="background:${STATUS[STATUS_BITS[i]].color}" title="${STATUS[STATUS_BITS[i]].th}">${STATUS[STATUS_BITS[i]].th.slice(0, 2)}</span>`);
       $('#statuses').innerHTML = st.join('');
     }
-    $('#dodgecd').textContent = me.dodge > 0 ? `หลบ ${me.dodge.toFixed(1)}` : 'หลบ ✓';
+    $('#ut-dodge small').textContent = me.dodge > 0 ? me.dodge.toFixed(1) : '';
+    $('#ut-dodge').style.opacity = me.dodge > 0 ? 0.5 : 1;
   }
   objectiveHtml(o) {
     if (o.dg) return `<b>${esc(this.G.inst?.name)}</b><br>${o.type === 'abyss' ? `ชั้น ${o.floor} • Modifiers: ${(o.mods || []).join(', ')}` : o.type === 'hunt' || o.type === 'guildboss' ? 'ล่าบอส' : `คลื่น ${o.wave}/${o.waves}${o.phase === 'boss' ? ' • บอส!' : ''}`}<br>ศัตรูเหลือ ${o.left}${o.revives != null ? ` • ฟื้นคืนชีพ ${o.revives}` : ''}${o.t ? `<br>ปิดใน ${o.t} วิ` : ''}`;
@@ -116,9 +178,10 @@ export class UI {
   }
   frame() {
     const me = this.G.me; if (!me || !this.G.char) return;
-    const els = document.querySelectorAll('#skillbar .slot');
-    els.forEach((el, i) => {
-      const cd = me.cds[i]; const ov = el.querySelector('.cd'); const tx = el.querySelector('.cdt');
+    const els = document.querySelectorAll('#hotbar .slot, #ultslot');
+    els.forEach((el) => {
+      const i = el.dataset.slot === 'u' ? HOTBAR_SIZE : +el.dataset.slot;
+      const cd = me.cds[i]; if (!el.querySelector('.cd')) return; const ov = el.querySelector('.cd'); const tx = el.querySelector('.cdt');
       if (!cd) { ov.style.height = '0'; tx.textContent = ''; el.classList.remove('nomp'); return; }
       const [rem, total, ch, cost] = cd;
       ov.style.height = rem > 0 ? `${Math.min(100, (rem / total) * 100)}%` : '0'; tx.textContent = rem > 0.05 ? rem.toFixed(rem < 2 ? 1 : 0) : (ch != null ? ch : '');
@@ -126,21 +189,36 @@ export class UI {
     });
     if (this.G.L) this.r.drawMinimap($('#minimap'));
     if (this.open.has('passives')) this.drawTree();
+    if (this.open.has('map')) this.drawBigMap();
   }
 
   // ---------------- HUD pieces ----------------
-  renderSkillbar() {
-    const c = this.G.char; const keys = ['1', '2', '3', '4', '5', '6', 'R'];
-    const ids = [...c.build.hotbar, c.build.ult];
-    $('#skillbar').innerHTML = ids.map((id, i) => { const s = id && getSkill(id); return `<div class="slot ${i === 6 ? 'ult' : ''}" data-tip="skill:${id || ''}" data-act="openSkills">${s ? this.skIcon(s) : ''}<div class="cd"></div><div class="cdt"></div><kbd>${keys[i]}</kbd></div>`; }).join('');
+  renderHotbar() {
+    const c = this.G.char; const keyName = (i) => `${i >= 20 ? 'Alt+' : i >= 10 ? '⇧' : ''}${(i % 10 + 1) % 10}`;
+    const hb = $('#hotbar');
+    hb.innerHTML = Array.from({ length: HOTBAR_SIZE }, (_, i) => { const id = c.build.hotbar[i]; const s = id && getSkill(id); return `<div class="slot r${Math.floor(i / 10)}" data-slot="${i}" draggable="${s ? 'true' : 'false'}" data-tip="skill:${id || ''}" data-act="slotClick">${s ? this.skIcon(s) : ''}<div class="cd"></div><div class="cdt"></div><kbd>${keyName(i)}</kbd></div>`; }).join('');
+    // rows: top = Alt row, middle = Shift row, bottom = main row (closest to the bottom edge)
+    hb.style.gridTemplateAreas = 'none';
+    [...hb.children].forEach((el, i) => { el.style.gridRow = this.rows === 1 ? '1' : String(3 - Math.floor(i / 10)); el.style.gridColumn = String((i % 10) + 1); });
+    hb.classList.toggle('collapsed', this.rows === 1);
+    $('#ab-toggle').textContent = this.rows === 1 ? '▲ ขยาย (3 แถว)' : '▼ ย่อ (1 แถว)';
+    const u = c.build.ult && getSkill(c.build.ult);
+    $('#ultslot').innerHTML = `${u ? this.skIcon(u) : '<div class="sk" style="--c:#2a2440;font-size:11px">ULT</div>'}<div class="cd"></div><div class="cdt"></div><kbd>R</kbd>`;
+    $('#ultslot').dataset.tip = 'skill:' + (c.build.ult || ''); $('#ultslot').draggable = !!u; $('#ultslot').dataset.act = 'slotClick';
   }
+  renderAutoBtn() { $('#ut-auto')?.classList.toggle('on', !!this.G.auto?.on); }
+  renderTracker() {
+    const c = this.G.char; const act = Object.entries(c.quests?.active || {});
+    $('#qtrack').innerHTML = act.length ? `<h5>📜 เควสต์ที่รับ (${act.length})</h5>` + act.map(([id, n]) => { const q = QUESTS[id]; if (!q) return ''; const done = n >= q.count; return `<div class="qt ${done ? 'done' : ''}">${esc(q.name)} <b>${n}/${q.count}</b>${done ? ' ✔ ส่งได้' : ''}<div class="mbar"><i style="width:${Math.min(100, (n / q.count) * 100)}%"></i></div></div>`; }).join('') : '';
+  }
+  slotName(i) { return `${i >= 20 ? 'A' : i >= 10 ? '⇧' : ''}${(i % 10 + 1) % 10}`; }
   skIcon(s, big) { const col = ELEMENT_INFO[s.el].color; return `<div class="sk ${big ? 'big' : ''} ${s.kind === 'ultimate' ? 'u' : ''}" style="--c:${col}">${BEH_GLYPH[s.behavior]}</div>`; }
   renderParty() {
     const p = this.G.char?.party;
     $('#party').innerHTML = p ? p.members.filter((m) => m.id !== this.G.char.id).map((m) => { const u = m.uid && this.G.units.get(m.uid); return `<div class="pm ${m.online ? '' : 'off'}"><b>${esc(m.name)}</b> <small>Lv${m.lv || '?'} ${m.cls ? CLASS_BY_ID[m.cls].name : ''}</small>${u ? `<div class="mbar"><i style="width:${u.hp / 10}%"></i></div>` : `<small class="dim">${esc(m.map || 'offline')}</small>`}</div>`; }).join('') : '';
   }
   toast(text, color = '#ffe9a0', ms = 3500) { const d = document.createElement('div'); d.className = 'toast'; d.style.color = color; d.textContent = text; this.toasts.appendChild(d); setTimeout(() => d.remove(), ms); while (this.toasts.children.length > 4) this.toasts.firstChild.remove(); }
-  chatLine(from, text, color, ch) { const log = $('#chat-log'); const d = document.createElement('div'); d.innerHTML = `<b style="color:${color}">[${{ say: 'พูด', world: 'โลก', party: 'ปาร์ตี้', guild: 'กิลด์', whisper: 'กระซิบ', sys: '!' }[ch] || ch}] ${esc(from)}:</b> <span style="color:${ch === 'sys' ? color : '#eee'}">${esc(text)}</span>`; log.appendChild(d); while (log.children.length > 120) log.firstChild.remove(); log.scrollTop = log.scrollHeight; }
+  chatLine(from, text, color, ch) { const log = $('#chat-log'); const d = document.createElement('div'); d.dataset.ch = ch === 'say' || ch === 'whisper' ? 'all' : ch; if (this.chatTab && this.chatTab !== 'all' && d.dataset.ch !== this.chatTab) d.hidden = true; d.innerHTML = `<b style="color:${color}">[${{ say: 'พูด', world: 'โลก', party: 'ปาร์ตี้', guild: 'กิลด์', whisper: 'กระซิบ', sys: '!' }[ch] || ch}] ${esc(from)}:</b> <span style="color:${ch === 'sys' ? color : '#eee'}">${esc(text)}</span>`; log.appendChild(d); while (log.children.length > 120) log.firstChild.remove(); log.scrollTop = log.scrollHeight; }
   typing() { const a = document.activeElement; return a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT'); }
   focusChat() { $('#chat-input').focus(); }
   blurChat() { document.activeElement?.blur(); }
@@ -157,8 +235,22 @@ export class UI {
     $('#invites').appendChild(d); setTimeout(() => d.remove(), 30000);
   }
 
+  // in-page dialogs (window.confirm/prompt are blocked inside sandboxed viewers)
+  ask(text, opts = {}) {
+    return new Promise((res) => {
+      const d = document.createElement('div'); d.className = 'modal';
+      d.innerHTML = `<div class="modal-box"><p>${esc(text)}</p>${opts.input != null ? `<input id="modal-in" value="${esc(opts.input)}" ${opts.number ? 'type="number"' : ''}>` : ''}${opts.choices ? `<select id="modal-in">${opts.choices.map((c) => `<option value="${esc(c[0])}">${esc(c[1])}</option>`).join('')}</select>` : ''}<div class="row"><button id="modal-ok">ตกลง</button><button class="alt" id="modal-no">ยกเลิก</button></div></div>`;
+      document.body.appendChild(d); const inp = d.querySelector('#modal-in'); (inp || d.querySelector('#modal-ok')).focus();
+      const done = (v) => { d.remove(); res(v); };
+      d.querySelector('#modal-ok').onclick = () => done(inp ? inp.value : true);
+      d.querySelector('#modal-no').onclick = () => done(null);
+      d.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.code === 'Enter') done(inp ? inp.value : true); if (e.code === 'Escape') done(null); });
+    });
+  }
   // ---------------- windows ----------------
   win(id, title, html, w = 560) {
+    if (HELP[id]) html = `<div class="help-bar">ℹ️ ${HELP[id]}</div>` + html;
+    w = Math.min(w, window.innerWidth - 20);
     let el = document.getElementById('w-' + id);
     if (!el) {
       el = document.createElement('div'); el.className = 'win'; el.id = 'w-' + id; el.style.width = w + 'px';
@@ -180,10 +272,12 @@ export class UI {
     if (p === 'quests') this.send({ t: 'quest', op: 'list' });
     if (p === 'pvp') { this.send({ t: 'pvp', op: 'status' }); this.send({ t: 'pvp', op: 'ladder', mode: this.ctx.ladderMode || 'duel' }); }
     if (p === 'guild' && !this.G.char?.guild) this.send({ t: 'guild', op: 'ranking' });
+    if (p === 'gm') this.send({ t: 'gm', op: 'state' });
   }
-  close(p) { this.open.delete(p); document.getElementById('w-' + p)?.remove(); if (p === 'passives') this.treeCv = null; }
+  close(p) { this.open.delete(p); document.getElementById('w-' + p)?.remove(); if (p === 'passives') this.treeCv = null; if (p === 'map') this.mapCv = null; }
   closeAll() { for (const p of [...this.open]) this.close(p); this.hideTip(); $('#ctxmenu').style.display = 'none'; }
-  hotkey(code) { const map = { KeyI: 'inventory', KeyC: 'character', KeyK: 'skills', KeyP: 'passives', KeyB: 'builds', KeyG: 'guild', KeyO: 'party', KeyJ: 'quests', KeyV: 'pvp', KeyM: 'worldmap', KeyH: 'help', KeyN: 'runes' }; if (map[code]) this.toggle(map[code]); }
+  closeTop() { let top = null, z = -1; for (const p of this.open) { const el = document.getElementById('w-' + p); if (el && +el.style.zIndex > z) { z = +el.style.zIndex; top = p; } } if (top) { this.close(top); this.hideTip(); return true; } return false; }
+  hotkey(code) { const map = { KeyI: 'inventory', KeyC: 'character', KeyK: 'skills', KeyP: 'passives', KeyB: 'builds', KeyG: 'guild', KeyO: 'party', KeyJ: 'quests', KeyV: 'pvp', KeyM: 'map', KeyH: 'help', KeyN: 'runes', KeyY: 'auto' }; if (map[code]) this.toggle(map[code]); }
   interact() { const me = this.G.units.get(this.G.you); if (!me) return; const n = this.G.npcs.map((n) => [n, Math.hypot(n.x - me.x, n.y - me.y)]).filter(([, d]) => d < 120).sort((a, b) => a[1] - b[1])[0]; if (n) this.openNpc(n[0]); }
   openNpc(n) {
     const map = { shop: ['shop', 'inventory'], smith: ['smith', 'inventory'], stash: ['stash', 'inventory'], market: ['market', 'inventory'], guild: ['guild'], arena: ['pvp'], dungeon: ['dungeon'], teleport: ['teleport'], quest: ['quests'], build: ['builds', 'skills'] }[n.type] || [];
@@ -240,13 +334,15 @@ export class UI {
       detail = `<div class="sk-head">${this.skIcon(sel, 1)}<div><h3>${esc(sel.name)}</h3><small>${sel.kind === 'ultimate' ? 'ULTIMATE' : 'ACTIVE'} • ${BEHAVIOR[sel.behavior].th} • <span style="color:${ELEMENT_INFO[spec.el].color}">${ELEMENT_INFO[spec.el].th}</span> • ปลดล็อก Lv ${sel.unlock}</small></div></div>
         <p>${esc(sel.desc)}</p>
         <div class="stat-grid">${[['Rank', `${rank}/${MAX_SKILL_RANK}`], ['ดาเมจ', spec.dmg ? Math.round(spec.dmg) + '%' : '-'], ['คูลดาวน์', spec.cd.toFixed(1) + 'วิ'], ['ใช้', Math.round(spec.cost) + ' ' + cls.resource.name], spec.radius ? ['รัศมี', Math.round(spec.radius)] : null, spec.range ? ['ระยะ', Math.round(spec.range)] : null, spec.count > 1 ? ['จำนวน', spec.count] : null, spec.chain ? ['กระโดด', spec.chain] : null, spec.pierce ? ['ทะลุ', spec.pierce] : null, spec.heal ? ['ฮีล', Math.round(spec.heal) + '%'] : null, spec.charges > 1 ? ['ชาร์จ', spec.charges] : null, spec.echo ? ['ซ้ำ', spec.echo] : null].filter(Boolean).map(([a, b]) => `<div><span>${a}</span><b>${b}</b></div>`).join('')}</div>
-        ${locked ? `<p class="err">ต้องการเลเวล ${sel.unlock}</p>` : `<div class="row">${sel.kind === 'ultimate' ? `<button data-act="equipSkill" data-slot="u" data-id="${sel.id}">ใส่ช่อง R</button>` : [0, 1, 2, 3, 4, 5].map((i) => `<button class="mini ${c.build.hotbar[i] === sel.id ? 'on' : ''}" data-act="equipSkill" data-slot="${i}" data-id="${sel.id}">ช่อง ${i + 1}</button>`).join('')}
-        <button class="mini gold" data-act="rankSkill" data-id="${sel.id}" ${rank >= MAX_SKILL_RANK || spent >= total ? 'disabled' : ''}>Rank +1</button></div>
+        ${locked ? `<p class="err">ต้องการเลเวล ${sel.unlock}</p>` : `${sel.kind === 'ultimate' ? `<div class="row"><button data-act="equipSkill" data-slot="u" data-id="${sel.id}">${c.build.ult === sel.id ? '✔ ใส่อยู่ช่อง R' : 'ใส่ช่องอัลติเมท [R]'}</button>` : `<h4>ใส่ลง Hotbar <small class="dim">(คลิกช่อง หรือลากสกิลจากรายการไปวางที่ Hotbar)</small></h4>
+        <div class="slotpick">${Array.from({ length: HOTBAR_SIZE }, (_, i) => { const id = c.build.hotbar[i]; return `<div class="${id === sel.id ? 'me' : id ? 'used' : ''}" data-act="equipSkill" data-slot="${i}" data-id="${sel.id}" title="${id ? esc(getSkill(id)?.name) : 'ว่าง'}">${this.slotName(i)}</div>`; }).join('')}</div>
+        <div class="row"><button class="mini" data-act="equipFree" data-id="${sel.id}">ใส่ช่องว่างถัดไป</button>`}
+        <button class="mini gold" data-act="rankSkill" data-id="${sel.id}" ${rank >= MAX_SKILL_RANK || spent >= total ? 'disabled' : ''}>Rank +1 (ใช้ 1 แต้ม)</button></div>
         <h4>Support Runes (${slots} ช่อง • เพิ่มที่ Rank 8 / 16)</h4><div class="rune-slots">${Array.from({ length: 3 }, (_, i) => { const r = runes[i] && RUNE_BY_ID[runes[i]]; if (i >= slots) return `<div class="rs lock">🔒 Rank ${i === 1 ? 8 : 16}</div>`; return `<div class="rs ${r ? 'on' : ''}">${r ? `<b data-tip="rune:${r.id}">${r.name}</b><button class="mini alt" data-act="unsocketRune" data-id="${sel.id}" data-idx="${i}">ถอด</button>` : `<select data-act-change="socketRune" data-id="${sel.id}" data-idx="${i}"><option value="">— เลือกรูน —</option>${owned.map((o) => `<option value="${o.id}" ${(usage[o.id] || 0) >= c.runes[o.id] ? 'disabled' : ''}>${o.name} (${(c.runes[o.id] || 0) - (usage[o.id] || 0)}/${c.runes[o.id]})</option>`).join('')}</select>`}</div>`; }).join('')}</div>
         ${spec.runes.length ? `<p class="dim">รูนที่ทำงาน: ${spec.runes.map((r) => RUNE_BY_ID[r].th).join(' / ')}</p>` : ''}`}`;
     }
     this.win('skills', `สกิล [K] — แต้มสกิล ${total - spent}/${total}`, `<div class="tabs">${tabs.map((t, i) => `<button class="${i === this.skillTab ? 'on' : ''}" data-act="skillTab" data-i="${i}">${esc(t)}</button>`).join('')}</div>
-      <div class="sk-wrap"><div class="sk-list">${list.map((s) => `<div class="sk-row ${s.id === this.selSkill ? 'sel' : ''} ${s.unlock > c.level ? 'locked' : ''}" data-act="selSkill" data-id="${s.id}" data-tip="skill:${s.id}">${this.skIcon(s)}<div><b>${esc(s.name)}</b><small>Lv${s.unlock} • R${c.skillRanks[s.id] || 1}${(c.build.runes[s.id] || []).filter(Boolean).length ? ' • ◆' + (c.build.runes[s.id] || []).filter(Boolean).length : ''}</small></div>${[...c.build.hotbar, c.build.ult].includes(s.id) ? '<em>✔</em>' : ''}</div>`).join('')}</div><div class="sk-detail">${detail}</div></div>`, 820);
+      <div class="sk-wrap"><div class="sk-list">${list.map((s) => `<div class="sk-row ${s.id === this.selSkill ? 'sel' : ''} ${s.unlock > c.level ? 'locked' : ''}" data-act="selSkill" data-id="${s.id}" ${s.unlock <= c.level ? `draggable="true" data-drag-skill="${s.id}"` : ''} title="${s.unlock <= c.level ? 'ลากไปวางที่ Hotbar ได้' : 'ยังไม่ปลดล็อก'}">${this.skIcon(s)}<div><b>${esc(s.name)}</b><small>Lv${s.unlock} • R${c.skillRanks[s.id] || 1}${(c.build.runes[s.id] || []).filter(Boolean).length ? ' • ◆' + (c.build.runes[s.id] || []).filter(Boolean).length : ''}</small></div>${c.build.ult === s.id ? '<em>R</em>' : c.build.hotbar.includes(s.id) ? `<em>${this.slotName(c.build.hotbar.indexOf(s.id))}</em>` : ''}</div>`).join('')}</div><div class="sk-detail">${detail}</div></div>`, 820);
   }
   p_runes() {
     const c = this.G.char; const usage = {}; for (const l of Object.values(c.build.runes)) for (const r of l) if (r) usage[r] = (usage[r] || 0) + 1;
@@ -388,15 +484,90 @@ export class UI {
       <p class="dim">ค่าวางขาย 1% • ค่าธรรมเนียมเมื่อขายได้ ${Math.round(ECONOMY.marketFee * 100)}% (ทองส่วนนี้ถูกทำลายเพื่อควบคุมเงินเฟ้อ) • Mythic ผูกมัดบัญชี ขายไม่ได้ • วางขายจากกระเป๋า: คลิกไอเทม → วางขาย</p>
       ${!m ? 'กำลังโหลด...' : `<div class="mk">${m.list.map((l) => `<div class="mk-row">${this.itemIcon(l.item, 'mk:' + l.id)}<div><b style="color:${RARITY_INFO[l.item.rarity].color}">${esc(l.item.name)}</b><br><small>${esc(l.seller)} • iLv${l.item.ilvl || '-'}</small></div><b class="price">${fmt(l.price)} 💰</b>${l.mine ? `<button class="mini alt" data-act="mCancel" data-id="${l.id}">ยกเลิก</button>` : `<button class="mini gold" data-act="mBuy" data-id="${l.id}">ซื้อ</button>`}</div>`).join('') || '<p class="dim">ไม่พบสินค้า</p>'}</div><small>${m.total} รายการ</small>`}`, 640);
   }
-  p_teleport() { const c = this.G.char; this.win('teleport', 'นักเคลื่อนย้าย', Object.values(TOWNS).map((t) => `<div class="row"><b>${esc(t.name)}</b> <small>${esc(t.th)} • Lv${t.lv[0]}+</small><button class="mini" data-act="teleport" data-to="${t.id}" ${c.level < t.lv[0] - 10 ? 'disabled' : ''}>เดินทาง (${ECONOMY.teleportGold} ทอง)</button></div>`).join(''), 420); }
-  p_worldmap() {
-    const cur = this.G.inst?.key;
-    this.win('worldmap', 'แผนที่โลก [M] — 5 เมือง • 30 แมพฟาร์ม', REGION_LIST.map((r) => `<h4>🏰 ${esc(r.town)} <small>${esc(r.th)} • Lv ${r.lv[0]}-${r.lv[1]}</small></h4><div class="wm">${r.maps.map((m, i) => { const id = `${r.id}_${i + 1}`; const d = MAPS[id]; return `<span class="${id === cur ? 'cur' : ''}" title="บอสแมพ: ${BOSSES[d.fieldBoss].name}">${esc(d.name)} <small>Lv${d.lv[0]}-${d.lv[1]}</small></span>`; }).join(' → ')}</div>`).join('') + '<p class="dim">บอสโลก: Elder Dragon (Goblin Ravine), Leviathan (Siren Cliffs), Worldsplitter Colossus (Sandstorm Canyon) — เกิดตามเวลา</p>', 760);
+  p_teleport() {
+    const c = this.G.char;
+    const row = (m) => { const cost = ECONOMY.teleportGold * (m.kind === 'town' ? 1 : 2); const lock = c.level < m.lv[0] - 10; return `<div class="row"><span style="flex:1">${m.kind === 'town' ? '🏰' : '🌲'} <b>${esc(m.name)}</b> <small class="dim">Lv ${m.lv[0]}${m.kind === 'field' ? '-' + m.lv[1] : '+'}</small></span><button class="mini" data-act="teleport" data-to="${m.id}" ${lock ? 'disabled title="เลเวลไม่ถึง"' : ''}>${cost} ทอง</button></div>`; };
+    this.win('teleport', '🌀 นักเคลื่อนย้าย', REGION_LIST.map((r) => `<h4>${esc(r.town)} <small class="dim">${esc(r.th)}</small></h4>${row(MAPS['town_' + r.id])}${r.maps.map((_, i) => row(MAPS[`${r.id}_${i + 1}`])).join('')}`).join(''), 460);
+  }
+  // ---- Map: full map of current area, click to walk; world overview ----
+  p_map() {
+    const tab = this.ctx.mapTab || 'area';
+    const el = this.win('map', `🗺 แผนที่ — ${this.G.inst?.name || ''}`, `<div class="tabs"><button class="${tab === 'area' ? 'on' : ''}" data-act="mapTab" data-t="area">แผนที่พื้นที่นี้</button><button class="${tab === 'world' ? 'on' : ''}" data-act="mapTab" data-t="world">แผนที่โลก</button></div>
+      ${tab === 'area' ? `<canvas id="bigmap" width="880" height="560"></canvas><div class="row small"><span>⬜ คุณ</span><span style="color:#7fe8ff">● ประตูวาร์ป (คลิกเพื่อเดินไป)</span><span style="color:#ffd84a">■ NPC</span><span style="color:#d86a4a">■ มอนสเตอร์</span><span style="color:#ff3a3a">■ บอส</span><span style="color:#4ad86a">■ เพื่อน</span></div>` :
+      REGION_LIST.map((r) => `<h4>🏰 ${esc(r.town)} <small class="dim">${esc(r.th)} • Lv ${r.lv[0]}-${r.lv[1]}</small></h4><div class="wm">${['town_' + r.id, ...r.maps.map((_, i) => `${r.id}_${i + 1}`)].map((id) => { const d = MAPS[id]; return `<span class="${id === this.G.inst?.key ? 'cur' : ''}" title="${d.fieldBoss ? 'บอสแมพ: ' + esc(BOSSES[d.fieldBoss].name) : 'เมือง'}">${esc(d.name)}${d.kind === 'field' ? ` <small>Lv${d.lv[0]}-${d.lv[1]}</small>` : ''}</span>`; }).join(' 🌀 ')}</div>`).join('') + `<p class="dim">บอสโลก: ${WORLD_BOSSES.map((w) => `${esc(w.name)} (${esc(MAPS[w.map].name)})`).join(' • ')}</p>`}`, 910);
+    if (tab === 'area') { const cv = el.querySelector('#bigmap'); if (this.mapCv !== cv) { this.mapCv = cv; cv.addEventListener('mousedown', (e) => { const r = cv.getBoundingClientRect(); const [wx, wy] = this.bigT.toWorld((e.clientX - r.left) * (cv.width / r.width), (e.clientY - r.top) * (cv.height / r.height)); const ex = this.G.L.exits.find((x) => Math.hypot(x.x - wx, x.y - wy) < 250); this.G.walkTo(ex ? ex.x : wx, ex ? ex.y : wy); }); } }
+  }
+  drawBigMap() { if (this.mapCv && document.body.contains(this.mapCv)) this.bigT = this.r.drawMap(this.mapCv, null, { big: true }); }
+  // ---- Auto settings ----
+  p_auto() {
+    const c = this.G.char; const A = this.G.auto; const cfg = A.cfg; const tab = this.ctx.autoTab || 'hunt';
+    let body = '';
+    if (tab === 'hunt') {
+      const mons = A.monsterChoices();
+      body = `<div class="row"><button class="${A.on ? 'gold' : ''}" data-act="autoToggle">${A.on ? '⏹ หยุดออโต้' : '▶ เริ่มออโต้'} [U]</button><span class="dim">${A.on ? 'กำลังทำงาน' : 'ยังไม่ทำงาน'}</span></div>
+        <h4>เป้าหมาย</h4>
+        <div class="row"><label class="toggle"><input type="radio" name="at" data-auto="targets" value="all" ${cfg.targets === 'all' ? 'checked' : ''}>มอนสเตอร์ทุกตัว</label><label class="toggle"><input type="radio" name="at" data-auto="targets" value="list" ${cfg.targets === 'list' ? 'checked' : ''}>เฉพาะที่เลือก</label><label class="toggle"><input type="radio" name="at" data-auto="targets" value="boss" ${cfg.targets === 'boss' ? 'checked' : ''}>เฉพาะบอส</label></div>
+        <div class="row wrap">${mons.map((n) => `<label class="toggle"><input type="checkbox" data-auto-list="${esc(n)}" ${cfg.list.includes(n) ? 'checked' : ''}>${esc(n)}</label>`).join('') || '<span class="dim">ไม่มีมอนสเตอร์ในพื้นที่นี้</span>'}</div>
+        <div class="row">เลือกตัวไหนก่อน <select data-auto="priority"><option value="nearest" ${cfg.priority === 'nearest' ? 'selected' : ''}>ใกล้ที่สุด</option><option value="lowhp" ${cfg.priority === 'lowhp' ? 'selected' : ''}>HP น้อยสุด</option><option value="highlv" ${cfg.priority === 'highlv' ? 'selected' : ''}>เลเวลสูงสุด</option></select>
+          <label class="toggle"><input type="checkbox" data-auto="bossFirst" ${cfg.bossFirst ? 'checked' : ''}>ตีบอสก่อนเสมอ</label><label class="toggle"><input type="checkbox" data-auto="avoidElite" ${cfg.avoidElite ? 'checked' : ''}>ไม่ตี Elite ★</label></div>
+        <h4>พื้นที่ล่า</h4><div class="row">รัศมี <input type="range" min="0" max="6000" step="250" data-auto="radius" value="${cfg.radius}"> <b>${cfg.radius ? cfg.radius + ' px' : 'ทั้งแมพ'}</b>
+          <select data-auto="anchor"><option value="start" ${cfg.anchor === 'start' ? 'selected' : ''}>วนรอบจุดที่เริ่มออโต้</option><option value="self" ${cfg.anchor === 'self' ? 'selected' : ''}>รอบตัวเรา (เดินไปเรื่อยๆ)</option></select></div>
+        <h4>ระบบช่วยเหลือ</h4><div class="row wrap"><label class="toggle"><input type="checkbox" data-auto="loot" ${cfg.loot ? 'checked' : ''}>เก็บของอัตโนมัติ</label><label class="toggle"><input type="checkbox" data-auto="dodge" ${cfg.dodge ? 'checked' : ''}>หลบท่าบอส (พื้นแดง)</label><label class="toggle"><input type="checkbox" data-auto="counter" ${cfg.counter ? 'checked' : ''}>กด Counter ท่าสีทอง</label><label class="toggle"><input type="checkbox" data-auto="useUlt" ${cfg.useUlt ? 'checked' : ''}>ใช้อัลติเมทกับบอส/Elite</label></div>
+        <div class="row">ใช้ยา HP เมื่อต่ำกว่า <input type="number" min="0" max="95" data-auto="potHp" value="${cfg.potHp}" style="width:60px">% • ยาทรัพยากรต่ำกว่า <input type="number" min="0" max="95" data-auto="potMp" value="${cfg.potMp}" style="width:60px">%</div>`;
+    } else {
+      const s = c.settings?.askill || {}; const ord = A.order; const off = s.off || [];
+      const filled = c.build.hotbar.map((id, i) => (id ? i : -1)).filter((i) => i >= 0);
+      const full = [...(s.order || []).filter((i) => filled.includes(i)), ...filled.filter((i) => !(s.order || []).includes(i))];
+      body = `<p class="dim">ออโต้จะใช้สกิลจากบนลงล่าง: ถ้าสกิลบนสุดยังติดคูลดาวน์หรือทรัพยากรไม่พอ จะไล่ไปใช้อันถัดไป ใช้ ▲▼ เพื่อจัดลำดับ และติ๊กออกเพื่อไม่ให้ออโต้ใช้สกิลนั้น</p>
+        ${full.map((i, k) => { const sk = getSkill(c.build.hotbar[i]); const sp = A.specs[i]; return `<div class="ord ${off.includes(i) ? 'off' : ''}"><b>${k + 1}.</b>${this.skIcon(sk)}<span>${esc(sk.name)} <small class="dim">ช่อง ${this.slotName(i)} • ${BEHAVIOR[sk.behavior].th} • CD ${sp ? sp.cd.toFixed(1) : '?'}วิ • ระยะ ${Math.round(A.range(sp))}</small></span><label class="toggle"><input type="checkbox" data-askill-off="${i}" ${off.includes(i) ? '' : 'checked'}>ใช้</label><button class="mini alt" data-act="ordMove" data-i="${i}" data-d="-1">▲</button><button class="mini alt" data-act="ordMove" data-i="${i}" data-d="1">▼</button></div>`; }).join('') || '<p class="dim">ยังไม่มีสกิลใน Hotbar</p>'}
+        <div class="row"><button class="mini alt" data-act="ordReset">เรียงตาม Hotbar</button></div>`;
+    }
+    this.win('auto', '🤖 ตั้งค่าออโต้ [Y]', `<div class="tabs"><button class="${tab === 'hunt' ? 'on' : ''}" data-act="autoTab" data-t="hunt">เป้าหมาย & การล่า</button><button class="${tab === 'skill' ? 'on' : ''}" data-act="autoTab" data-t="skill">ลำดับสกิล</button></div>${body}`, 640);
+  }
+  saveAuto(patch) { const c = this.G.char; c.settings = c.settings || {}; c.settings.auto = { ...AUTO_DEFAULT, ...(c.settings.auto || {}), ...patch }; this.send({ t: 'settings', key: 'auto', value: c.settings.auto }); this.renderPanel('auto'); }
+  saveAskill(patch) { const c = this.G.char; c.settings = c.settings || {}; c.settings.askill = { ...(c.settings.askill || {}), ...patch }; this.send({ t: 'settings', key: 'askill', value: c.settings.askill }); this.renderPanel('auto'); }
+  // ---- GM panel ----
+  p_gm() {
+    const g = this.ctx.gm; const tab = this.ctx.gmTab || 'players';
+    if (!this.G.char.gm) return this.win('gm', '👑 GM', '<p class="err">คุณไม่มีสิทธิ์ GM</p>', 400);
+    if (!g) return this.win('gm', '👑 GM Panel', 'กำลังโหลด...', 760);
+    const tabs = { players: 'ผู้เล่น', give: 'ให้ของ/แก้ตัวละคร', world: 'โลก & มอนสเตอร์', server: 'เซิร์ฟเวอร์', log: 'บันทึก GM' };
+    const sel = this.ctx.gmTarget || this.G.char.name;
+    const target = `<div class="row">เป้าหมาย <select id="gmt">${g.players.map((p) => `<option ${p.name === sel ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select><button class="mini alt" data-act="gmRefresh">รีเฟรช</button></div>`;
+    let body = '';
+    if (tab === 'players') body = `<table class="tbl"><tr><th>ชื่อ</th><th>บัญชี</th><th>Lv</th><th>คลาส</th><th>ที่อยู่</th><th>ทอง</th><th></th></tr>${g.players.map((p) => `<tr><td>${p.gm ? '👑 ' : ''}${esc(p.name)}${p.muted ? ' 🔇' : ''}</td><td>${esc(p.acc)}</td><td>${p.lv}</td><td>${CLASS_BY_ID[p.cls]?.name}</td><td>${esc(p.map)}</td><td>${fmt(p.gold)}</td><td><button class="mini" data-act="gm" data-op="goto" data-name="${esc(p.name)}">ไปหา</button><button class="mini" data-act="gm" data-op="summon" data-name="${esc(p.name)}">เรียก</button><button class="mini" data-act="gmp" data-a="heal" data-name="${esc(p.name)}">ฮีล</button><button class="mini alt" data-act="gmp" data-a="kick" data-name="${esc(p.name)}">เตะ</button><button class="mini alt" data-act="gmp" data-a="mute" data-n="10" data-name="${esc(p.name)}">ใบ้ 10น.</button><button class="mini alt" data-act="gmBan" data-name="${esc(p.acc)}">แบน</button></td></tr>`).join('')}</table>
+      <h4>บัญชีที่ถูกแบน</h4>${g.banned.map((b) => `<div class="row">${esc(b.acc)} <small class="dim">${esc(b.reason || '')}</small><button class="mini" data-act="gm" data-op="unban" data-name="${esc(b.acc)}">ปลดแบน</button></div>`).join('') || '<span class="dim">-</span>'}
+      <h4>ผู้มีสิทธิ์ GM</h4><div class="row">${g.gms.map((x) => `<span>👑 ${esc(x)}</span>`).join(' ')}</div><div class="row"><input id="gmacc" placeholder="ชื่อบัญชีหรือชื่อตัวละคร"><button class="mini gold" data-act="gmSetGM" data-v="1">ให้สิทธิ์ GM</button><button class="mini alt" data-act="gmSetGM" data-v="0">ถอดสิทธิ์</button></div>`;
+    if (tab === 'give') body = target + `<div class="gm-grid">
+      <div class="gm-card"><h4>เลเวล & ค่าเงิน</h4><div class="row"><input id="gmlv" type="number" value="300" style="width:70px"><button class="mini" data-act="gmpv" data-a="level" data-src="gmlv">ตั้งเลเวล</button></div><div class="row"><input id="gmgold" type="number" value="1000000" style="width:110px"><button class="mini" data-act="gmpv" data-a="gold" data-src="gmgold">+ทอง</button><button class="mini" data-act="gmpv" data-a="honor" data-src="gmgold">+Honor</button><button class="mini" data-act="gmpv" data-a="exp" data-src="gmgold">+EXP</button></div></div>
+      <div class="gm-card"><h4>ไอเทม</h4><div class="row"><select id="gmslot"><option value="all">ครบชุด</option>${['weapon', 'offhand', 'helm', 'chest', 'gloves', 'boots', 'belt', 'amulet', 'ring'].map((x) => `<option value="${x}">${SLOT_TH[x]}</option>`).join('')}</select><select id="gmrar">${RARITIES.map((r) => `<option value="${r}" ${r === 'legendary' ? 'selected' : ''}>${RARITY_INFO[r].th}</option>`).join('')}</select><input id="gmilvl" type="number" placeholder="iLvl" style="width:60px"><button class="mini gold" data-act="gmItem">สร้าง</button></div></div>
+      <div class="gm-card"><h4>ทรัพยากร</h4><div class="row wrap"><button class="mini" data-act="gmp" data-a="mats">+วัตถุดิบ 100</button><button class="mini" data-act="gmp" data-a="runes">+รูนทุกแบบ 3</button><button class="mini" data-act="gmp" data-a="potions">+ยา 100</button><button class="mini" data-act="gmp" data-a="repair">ซ่อมอุปกรณ์</button></div></div>
+      <div class="gm-card"><h4>สถานะ</h4><div class="row wrap"><button class="mini" data-act="gmp" data-a="heal">ฮีลเต็ม</button><button class="mini" data-act="gmp" data-a="revive">ชุบชีวิต</button><button class="mini alt" data-act="gmp" data-a="kill">สังหาร</button><button class="mini alt" data-act="gmp" data-a="resetBuild">รีเซ็ต Build</button><button class="mini alt" data-act="gmp" data-a="clearInv">ล้างกระเป๋า</button><button class="mini" data-act="gmp" data-a="unmute">ปลดใบ้</button></div>
+        <div class="row"><select id="gmwarp2">${Object.values(MAPS).map((m) => `<option value="${m.id}">${esc(m.name)}</option>`).join('')}</select><button class="mini" data-act="gmpWarp">ส่งผู้เล่นไปแมพนี้</button></div></div></div>`;
+    if (tab === 'world') {
+      const here = MAPS[this.G.inst?.key];
+      const mons = Object.values(MONSTERS); const pre = here?.monsters?.[0];
+      body = `<div class="gm-grid"><div class="gm-card"><h4>ตัว GM</h4><div class="row wrap"><label class="toggle"><input type="checkbox" data-gmself="god" ${g.self?.god ? 'checked' : ''}>อมตะ (God)</label><label class="toggle"><input type="checkbox" data-gmself="invis" ${g.self?.invis ? 'checked' : ''}>ล่องหน</label></div><div class="row">ความเร็ว <input type="range" min="0.5" max="5" step="0.5" value="${g.self?.speed || 1}" data-gmself="speed"> x${g.self?.speed || 1}</div>
+        <div class="row"><select id="gmwarp">${Object.values(MAPS).map((m) => `<option value="${m.id}" ${m.id === this.G.inst?.key ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}</select><button class="mini" data-act="gmWarp">วาร์ป (GM)</button></div></div>
+        <div class="gm-card"><h4>เสกมอนสเตอร์ (ที่ตำแหน่งคุณ)</h4><div class="row"><select id="gmmon">${mons.map((m) => `<option value="${m.id}" ${m.id === pre ? 'selected' : ''}>${esc(m.name)} (Lv${m.lv})</option>`).join('')}</select></div><div class="row">จำนวน <input id="gmn" type="number" value="5" style="width:50px"> Lv <input id="gmmlv" type="number" placeholder="อัตโนมัติ" style="width:70px"><label class="toggle"><input type="checkbox" id="gmelite">Elite</label><button class="mini gold" data-act="gmSpawn">เสก</button></div>
+          <div class="row"><select id="gmboss">${Object.values(BOSSES).map((b) => `<option value="${b.id}">${esc(b.name)} (Lv${b.lv})</option>`).join('')}</select> HP x<input id="gmbhp" type="number" value="1" step="0.5" style="width:50px"><label class="toggle"><input type="checkbox" id="gmworld">บอสโลก</label><button class="mini gold" data-act="gmBoss">เสกบอส</button></div>
+          <div class="row"><button class="mini alt" data-act="gm" data-op="killAll">ฆ่ามอนทั้งแมพ</button><button class="mini alt" data-act="gm" data-op="clearSpawns">ลบมอนที่ GM เสก</button></div>
+          <div class="row"><select id="gmwb">${WORLD_BOSSES.map((w) => `<option value="${w.id}">${esc(w.name)}</option>`).join('')}</select><button class="mini" data-act="gmWB">เรียกบอสโลกตอนนี้</button></div></div>
+        <div class="gm-card"><h4>ประกาศ</h4><div class="row"><input id="gmann" placeholder="ข้อความถึงผู้เล่นทุกคน" style="flex:1"><button class="mini gold" data-act="gmAnn">ประกาศ</button></div></div>
+        <div class="gm-card"><h4>อัตราเกม (อีเวนต์)</h4><div class="row">EXP x<input id="gmre" type="number" step="0.5" value="${g.rates.exp}" style="width:55px"> ดรอป x<input id="gmrd" type="number" step="0.5" value="${g.rates.drop}" style="width:55px"> ทอง x<input id="gmrg" type="number" step="0.5" value="${g.rates.gold}" style="width:55px"><button class="mini gold" data-act="gmRates">ใช้</button></div></div></div>
+        <h4>กิลด์</h4><table class="tbl"><tr><th>กิลด์</th><th>Lv</th><th>เงิน</th><th>สมาชิก</th><th></th></tr>${g.guilds.map((x) => `<tr><td>[${esc(x.tag)}] ${esc(x.name)}</td><td>${x.level}</td><td>${fmt(x.funds)}</td><td>${x.members}</td><td><button class="mini" data-act="gmGuild" data-id="${x.id}" data-a="level">ตั้ง Lv</button><button class="mini" data-act="gmGuild" data-id="${x.id}" data-a="funds">ตั้งเงิน</button><button class="mini alt" data-act="gmGuild" data-id="${x.id}" data-a="disband">ยุบ</button></td></tr>`).join('')}</table>`;
+    }
+    if (tab === 'server') body = `<div class="stat-grid">${Object.entries({ 'ออนไลน์': g.stats.online, 'การเชื่อมต่อ': g.stats.sessions, 'Instance': g.stats.instances, 'Unit จำลองอยู่': g.stats.units, 'บัญชี': g.stats.accounts, 'ตัวละคร': g.stats.chars, 'กิลด์': g.stats.guilds, 'สินค้าในตลาด': g.stats.listings, 'Uptime': Math.floor(g.stats.uptime / 60) + ' นาที', 'หน่วยความจำ': g.stats.memMB != null ? g.stats.memMB + ' MB' : '-' }).map(([a, b]) => `<div><span>${a}</span><b>${b}</b></div>`).join('')}</div>
+      <h4>ตั้งค่าเซิร์ฟเวอร์</h4><div class="row">เติมบอท PvP หลัง <input id="gmc1" type="number" value="${g.config.pvpBotFill}" style="width:60px"> วิ • Raid ขั้นต่ำ <input id="gmc2" type="number" value="${g.config.raidMinPlayers}" style="width:50px"> คน • Guild War ขั้นต่ำ <input id="gmc3" type="number" value="${g.config.guildWarMin}" style="width:50px"><button class="mini gold" data-act="gmConfig">บันทึก</button></div>
+      <div class="row"><button data-act="gm" data-op="save">บันทึกฐานข้อมูลตอนนี้</button>${window.TENEND_RESET ? '<button class="alt" data-act="gmWipe">ลบเซฟทั้งหมด (ออฟไลน์)</button>' : ''}</div>`;
+    if (tab === 'log') body = `<div class="log">${g.log.map((l) => `<div><small class="dim">${new Date(l.t).toLocaleString()}</small> <b>${esc(l.by)}</b> ${esc(l.text)}</div>`).join('') || '-'}</div>`;
+    this.win('gm', '👑 GM Panel [F9]', `<div class="tabs">${Object.entries(tabs).map(([k, v]) => `<button class="${k === tab ? 'on' : ''}" data-act="gmTab" data-t="${k}">${v}</button>`).join('')}</div>${body}`, 820);
   }
   p_help() {
-    this.win('help', 'วิธีเล่น [H]', `<div class="help"><b>ควบคุม</b><br>WASD เดิน • เมาส์เล็ง • คลิกซ้าย = สกิลช่อง 1 • คลิกขวา = ช่อง 2 • 1-6 สกิล • R อัลติเมท<br>Space หลบ (อมตะชั่วขณะ) • F Counter/Parry (ใช้กับท่าทองของบอส) • Q ยาฟื้น HP • T ยาทรัพยากร • Z เก็บของรอบตัว • Tab แสดงชื่อของดรอป • E คุยกับ NPC
-      <br><br><b>เมนู</b><br>I กระเป๋า • C ตัวละคร • K สกิล • N รูน • P Passive Tree • B Build Presets • J เควสต์ • O ปาร์ตี้ • G กิลด์ • V PvP • M แผนที่ • Enter แชท (/w ชื่อ, /p, /g, /world)
-      <br><br><b>วงจรการเล่น</b><br>1) เลือกคลาส + สร้าง Build (สกิล รูน Passive) 2) ฟาร์ม/เควสต์/ดันเจี้ยน คนเดียวหรือปาร์ตี้ 3) อ่านท่าบอส หลบ Counter คอมโบ 4) หาของ คราฟต์ ตีบวก แลกเปลี่ยน 5) Endgame: Abyss, Raid, PvP, Guild War แล้ววนกลับไปลอง Build ใหม่</div>`, 620);
+    this.win('help', '❔ วิธีเล่น [H]', `<div class="help"><b>การเคลื่อนที่</b><br>คลิกซ้ายที่พื้น = เดินไปจุดนั้น (หาทางอ้อมสิ่งกีดขวางให้เอง) • กดค้างแล้วลาก = เดินตามเมาส์ • WASD = เดินเอง • คลิกมินิแมพหรือแผนที่ [M] = เดินไปที่นั่น<br>ประตูวาร์ป 🌀 ที่ขอบแผนที่เชื่อมไปแมพถัดไป • วาร์ปข้ามเมืองได้ที่ <b>นักเคลื่อนย้าย</b> ในเมืองเท่านั้น
+      <br><br><b>การต่อสู้</b><br>คลิกซ้ายที่มอนสเตอร์ = ล็อกเป้าแล้วตีด้วยสกิลลำดับแรก • Hotbar 30 ช่อง: แถวล่าง 1-0, แถวกลาง Shift+1-0, แถวบน Alt+1-0 (สกิลเล็งตามเมาส์) • คลิกขวา = สกิลช่อง 2 • R อัลติเมท<br>Space หลบ (อมตะชั่วขณะ) • F Counter: ใช้กับท่าสีทองของบอส • Q / T ยา • Z เก็บของรอบตัว • Tab แสดงชื่อของดรอป
+      <br><br><b>ออโต้</b><br>U เปิด/ปิด • Y ตั้งค่า: เลือกมอนที่จะตี รัศมี การเก็บของ ใช้ยา หลบท่าบอส และจัดลำดับสกิลที่จะใช้
+      <br><br><b>เมนู</b><br>I กระเป๋า • C ตัวละคร • K สกิล (ลากไปวางที่ Hotbar) • N รูน • P Passive Tree • B Build Presets • J เควสต์ • O ปาร์ตี้ • G กิลด์ • V PvP • M แผนที่ • E คุยกับ NPC • Esc ปิดหน้าต่างบนสุด • Enter แชท</div>`, 640);
   }
 
   // ---------------- tooltips ----------------
@@ -466,12 +637,12 @@ export class UI {
       case 'stash': return S({ t: 'npc', op: 'stash', idx });
       case 'unstash': return S({ t: 'npc', op: 'unstash', idx });
       case 'lock': return S({ t: 'item', op: 'lock', ref: { where: w, idx, slot: k } });
-      case 'destroy': if (confirm(`ทิ้ง ${it.name}?`)) S({ t: 'item', op: 'destroy', idx }); return;
-      case 'mList': { const p = prompt(`ตั้งราคาขาย ${it.name} (ทอง)`, String(sellPrice(it) * 3)); if (p) S({ t: 'market', op: 'list', idx, price: +p }); return; }
+      case 'destroy': this.ask(`ทิ้ง ${it.name}? (กู้คืนไม่ได้)`).then((ok) => ok && S({ t: 'item', op: 'destroy', idx })); return;
+      case 'mList': this.ask(`ตั้งราคาขาย ${it.name} (ทอง)`, { input: String(sellPrice(it) * 3), number: true }).then((p) => p && S({ t: 'market', op: 'list', idx, price: +p })); return;
       case 'smithSel': this.ctx.smithRef = ref; this.ctx.stab = 'enhance'; return this.renderPanel('smith');
       case 'gDeposit': return S({ t: 'guild', op: 'deposit', idx });
       case 'gWithdraw': return S({ t: 'guild', op: 'withdraw', idx });
-      case 'cardMenu': { const eq = Object.entries(this.G.char.equip).filter(([, e]) => e && (e.cards || []).length < e.sockets); if (!eq.length) return this.toast('ไม่มีอุปกรณ์ที่มีช่อง Socket ว่าง', '#ff6a6a'); const ch = prompt(`ฝังลงช่องไหน? (${eq.map(([s]) => s).join(', ')})`, eq[0][0]); if (ch) S({ t: 'item', op: 'socketCard', ref: { where: 'equip', slot: ch }, cardIdx: idx }); return; }
+      case 'cardMenu': { const eq = Object.entries(this.G.char.equip).filter(([, e]) => e && (e.cards || []).length < e.sockets); if (!eq.length) return this.toast('ไม่มีอุปกรณ์ที่มีช่อง Socket ว่าง', '#ff6a6a'); this.ask('ฝังการ์ดลงอุปกรณ์ชิ้นไหน?', { choices: eq.map(([sl, e]) => [sl, `${SLOT_TH[sl]}: ${e.name}`]) }).then((ch) => ch && S({ t: 'item', op: 'socketCard', ref: { where: 'equip', slot: ch }, cardIdx: idx })); return; }
     }
   }
 
@@ -488,7 +659,7 @@ export class UI {
       case 'pickclass': this.newClass = d.id; return this.buildCharSel(this.charList);
       case 'create': return S({ t: 'createChar', name: v('cname'), classId: this.newClass });
       case 'play': return S({ t: 'selectChar', id: d.id });
-      case 'delchar': if (confirm('ลบตัวละครนี้ถาวร?')) S({ t: 'deleteChar', id: d.id }); return;
+      case 'delchar': this.ask('ลบตัวละครนี้ถาวร?').then((ok) => ok && S({ t: 'deleteChar', id: d.id })); return;
       case 'logoutAcc': return location.reload();
       case 'logout': this.closeAll(); return S({ t: 'logout' });
       case 'close': return this.close(d.id);
@@ -498,7 +669,7 @@ export class UI {
       case 'item': e.stopPropagation(); { const ref = d.ref; const [w] = ref.split(':'); if (w === 'mk') return; if (this.ctx.npc === 'smith' && this.open.has('smith') && (w === 'inv' || w === 'equip') && this.refItem(ref)?.type === 'gear' && e.shiftKey) { this.ctx.smithRef = ref; this.ctx.stab = 'enhance'; return this.renderPanel('smith'); } return this.itemMenu(ref, e.clientX, e.clientY); }
       case 'imenu': $('#ctxmenu').style.display = 'none'; return this.imenu(d.a, d.ref);
       case 'sortInv': return S({ t: 'item', op: 'sort' });
-      case 'salvageJunk': { const idxs = c.inv.map((it, i) => [it, i]).filter(([it]) => it.type === 'gear' && ['common', 'magic'].includes(it.rarity) && !it.locked).map(([, i]) => i); if (idxs.length && confirm(`แยกชิ้นส่วน ${idxs.length} ชิ้น?`)) S({ t: 'item', op: 'salvage', idxs }); return; }
+      case 'salvageJunk': { const idxs = c.inv.map((it, i) => [it, i]).filter(([it]) => it.type === 'gear' && ['common', 'magic'].includes(it.rarity) && !it.locked).map(([, i]) => i); if (idxs.length) this.ask(`แยกชิ้นส่วน ${idxs.length} ชิ้น?`).then((ok) => ok && S({ t: 'item', op: 'salvage', idxs })); return; }
       case 'openSkills': return this.openPanel('skills');
       case 'skillTab': this.skillTab = +d.i; return this.renderPanel('skills');
       case 'selSkill': this.selSkill = d.id; return this.renderPanel('skills');
@@ -511,7 +682,7 @@ export class UI {
       case 'savePreset': return S({ t: 'build', op: 'savePreset', idx: +d.i, name: v('pn' + d.i), tag: v('pt' + d.i) });
       case 'loadPreset': return S({ t: 'build', op: 'loadPreset', idx: +d.i });
       case 'delPreset': return S({ t: 'build', op: 'deletePreset', idx: +d.i });
-      case 'reset': if (confirm('ยืนยันการรีเซ็ต?')) S({ t: 'build', op: 'reset', what: d.what }); return;
+      case 'reset': this.ask('ยืนยันการรีเซ็ต? (ใช้ทองตามที่แสดง)').then((ok) => ok && S({ t: 'build', op: 'reset', what: d.what })); return;
       case 'quest': return S({ t: 'quest', op: d.op, id: d.id });
       case 'partyInvite': return S({ t: 'party', op: 'invite', name: v('pinv') });
       case 'partyLeave': return S({ t: 'party', op: 'leave' });
@@ -522,7 +693,7 @@ export class UI {
       case 'gtab': this.ctx.gtab = d.t; return this.renderPanel('guild');
       case 'guildCreate': return S({ t: 'guild', op: 'create', name: v('gname'), tag: v('gtag'), shape: v('gshape'), icon: v('gicon'), color: v('gcolor') });
       case 'guildInvite': return S({ t: 'guild', op: 'invite', name: v('ginv') });
-      case 'guildLeave': if (confirm('ออกจากกิลด์?')) S({ t: 'guild', op: 'leave' }); return;
+      case 'guildLeave': this.ask('ออกจากกิลด์?').then((ok) => ok && S({ t: 'guild', op: 'leave' })); return;
       case 'guildRank': return S({ t: 'guild', op: d.op, id: d.id });
       case 'guildDonate': return S({ t: 'guild', op: 'donate', gold: +v('gdon') });
       case 'guildNotice': return S({ t: 'guild', op: 'notice', text: v('gnotice') });
@@ -546,10 +717,47 @@ export class UI {
       case 'mBuy': return S({ t: 'market', op: 'buy', id: d.id });
       case 'mCancel': return S({ t: 'market', op: 'cancel', id: d.id });
       case 'teleport': return S({ t: 'npc', op: 'teleport', to: d.to });
+      // ---- HUD ----
+      case 'hotbarToggle': this.rows = this.rows === 1 ? 3 : 1; try { localStorage.setItem('tenend-hotbar-rows', this.rows); } catch { /* ignore */ } return this.renderHotbar();
+      case 'slotClick': { const slot = el.dataset.slot === 'u' ? 'u' : +el.dataset.slot; const id = slot === 'u' ? c.build.ult : c.build.hotbar[slot]; if (!id) return this.openPanel('skills'); const me = this.G.units.get(this.G.you); const t = this.G.auto.target && this.G.units.get(this.G.auto.target); const x = t ? t.x : me.x + Math.cos(me.facing) * 120, y = t ? t.y : me.y + Math.sin(me.facing) * 120; return S({ t: 'cast', slot, x: Math.round(x), y: Math.round(y) }); }
+      case 'equipFree': { const i = c.build.hotbar.findIndex((x) => !x); if (i < 0) return this.toast('Hotbar เต็มแล้ว', '#ff6a6a'); return S({ t: 'build', op: 'equipSkill', slot: i, id: d.id }); }
+      case 'pot': return S({ t: 'potion', kind: d.k });
+      case 'counter': return S({ t: 'counter' });
+      case 'autoToggle': this.G.auto.toggle(); return this.renderPanel('auto');
+      case 'autoTab': this.ctx.autoTab = d.t; return this.renderPanel('auto');
+      case 'ordMove': { const A = this.G.auto; const filled = c.build.hotbar.map((id, i) => (id ? i : -1)).filter((i) => i >= 0); const so = c.settings?.askill?.order || []; const full = [...so.filter((i) => filled.includes(i)), ...filled.filter((i) => !so.includes(i))]; const k = full.indexOf(+d.i), j = k + +d.d; if (j < 0 || j >= full.length) return; [full[k], full[j]] = [full[j], full[k]]; void A; return this.saveAskill({ order: full }); }
+      case 'ordReset': return this.saveAskill({ order: [] });
+      case 'chatTab': this.chatTab = d.t; document.querySelectorAll('#chat-tabs button').forEach((b) => b.classList.toggle('on', b.dataset.t === d.t)); document.querySelectorAll('#chat-log > div').forEach((x) => { x.hidden = d.t !== 'all' && x.dataset.ch !== d.t; }); return;
+      case 'miniZoom': this.r.miniSpan = Math.max(900, Math.min(9000, (this.r.miniSpan || 2600) * (+d.z > 0 ? 1.4 : 1 / 1.4))); return;
+      case 'mapTab': this.ctx.mapTab = d.t; this.mapCv = null; return this.renderPanel('map');
+      // ---- GM ----
+      case 'gmTab': this.ctx.gmTab = d.t; return this.renderPanel('gm');
+      case 'gmRefresh': this.ctx.gmTarget = v('gmt'); return S({ t: 'gm', op: 'state' });
+      case 'gm': return S({ t: 'gm', op: d.op, name: d.name });
+      case 'gmp': this.ctx.gmTarget = d.name || v('gmt') || this.ctx.gmTarget; return S({ t: 'gm', op: 'player', name: d.name || v('gmt'), action: d.a, n: d.n ? +d.n : undefined });
+      case 'gmpv': this.ctx.gmTarget = v('gmt'); return S({ t: 'gm', op: 'player', name: v('gmt'), action: d.a, n: +v(d.src) });
+      case 'gmItem': this.ctx.gmTarget = v('gmt'); return S({ t: 'gm', op: 'player', name: v('gmt'), action: 'item', slot: v('gmslot'), rarity: v('gmrar'), ilvl: +v('gmilvl') || 0 });
+      case 'gmpWarp': return S({ t: 'gm', op: 'player', name: v('gmt'), action: 'warp', map: v('gmwarp2') });
+      case 'gmBan': this.ask(`แบนบัญชี ${d.name}? ใส่เหตุผล`, { input: '' }).then((r) => r != null && S({ t: 'gm', op: 'ban', name: d.name, reason: r })); return;
+      case 'gmSetGM': return S({ t: 'gm', op: 'setgm', name: v('gmacc'), value: d.v === '1' });
+      case 'gmWarp': return S({ t: 'gm', op: 'warp', map: v('gmwarp') });
+      case 'gmSpawn': return S({ t: 'gm', op: 'spawn', tpl: v('gmmon'), n: +v('gmn'), lv: +v('gmmlv') || 0, elite: $('#gmelite')?.checked });
+      case 'gmBoss': return S({ t: 'gm', op: 'boss', id: v('gmboss'), hpMul: +v('gmbhp') || 1, world: $('#gmworld')?.checked });
+      case 'gmWB': return S({ t: 'gm', op: 'worldboss', id: v('gmwb') });
+      case 'gmAnn': return S({ t: 'gm', op: 'announce', text: v('gmann') });
+      case 'gmRates': return S({ t: 'gm', op: 'rates', exp: +v('gmre'), drop: +v('gmrd'), gold: +v('gmrg') });
+      case 'gmConfig': return S({ t: 'gm', op: 'config', pvpBotFill: +v('gmc1'), raidMinPlayers: +v('gmc2'), guildWarMin: +v('gmc3') });
+      case 'gmGuild': if (d.a === 'disband') { this.ask('ยุบกิลด์นี้ถาวร?').then((ok) => ok && S({ t: 'gm', op: 'guild', id: d.id, action: 'disband' })); return; } this.ask(d.a === 'level' ? 'ตั้งเลเวลกิลด์เป็น' : 'ตั้งเงินกิลด์เป็น', { input: d.a === 'level' ? '10' : '1000000', number: true }).then((n) => n != null && S({ t: 'gm', op: 'guild', id: d.id, action: d.a, n: +n })); return;
+      case 'gmWipe': this.ask('ลบเซฟทั้งหมดในเบราว์เซอร์นี้? (บัญชี ตัวละคร กิลด์ ทั้งหมด)').then((ok) => ok && window.TENEND_RESET()); return;
     }
   }
 }
 UI.z = 100;
 document.addEventListener('change', (e) => {
-  const el = e.target; if (el.dataset?.actChange === 'socketRune' && el.value) window.G.send({ t: 'build', op: 'socketRune', id: el.dataset.id, idx: +el.dataset.idx, rune: el.value });
+  const el = e.target; const ui = window.G.ui;
+  if (el.dataset?.actChange === 'socketRune' && el.value) window.G.send({ t: 'build', op: 'socketRune', id: el.dataset.id, idx: +el.dataset.idx, rune: el.value });
+  if (el.dataset?.auto) { const k = el.dataset.auto; const val = el.type === 'checkbox' ? el.checked : el.type === 'range' || el.type === 'number' ? +el.value : el.value; ui.saveAuto({ [k]: val }); }
+  if (el.dataset?.autoList != null) { const cfg = window.G.auto.cfg; const list = new Set(cfg.list); el.checked ? list.add(el.dataset.autoList) : list.delete(el.dataset.autoList); ui.saveAuto({ list: [...list], targets: 'list' }); }
+  if (el.dataset?.askillOff != null) { const off = new Set(window.G.char.settings?.askill?.off || []); const i = +el.dataset.askillOff; el.checked ? off.delete(i) : off.add(i); ui.saveAskill({ off: [...off] }); }
+  if (el.dataset?.gmself) { const k = el.dataset.gmself; window.G.send({ t: 'gm', op: 'self', [k]: el.type === 'checkbox' ? el.checked : +el.value }); }
 });

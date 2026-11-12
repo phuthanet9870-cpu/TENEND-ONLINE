@@ -103,8 +103,8 @@ const NPC_LAYOUT = [
 REGIONS.forEach((reg, ri) => {
   const townId = `town_${reg.id}`;
   TOWNS[townId] = MAPS[townId] = {
-    id: townId, kind: 'town', name: reg.town, th: reg.th, region: reg.id, biome: 'town', lv: [reg.lv[0], reg.lv[0]], w: 44, h: 32, safe: true,
-    npcs: NPC_LAYOUT.map(([type, name, dx, dy]) => ({ id: `${townId}_${type}`, type, name, x: (22 + dx) * 32 + 16, y: (16 + dy) * 32 + 16 })),
+    id: townId, kind: 'town', name: reg.town, th: reg.th, region: reg.id, biome: 'town', lv: [reg.lv[0], reg.lv[0]], w: 96, h: 72, safe: true,
+    npcs: NPC_LAYOUT.map(([type, name, dx, dy]) => ({ id: `${townId}_${type}`, type, name, x: (48 + Math.round(dx * 1.3)) * 32 + 16, y: (36 + Math.round(dy * 1.2)) * 32 + 16 })),
     exits: [], index: ri,
   };
   const span = (reg.lv[1] - reg.lv[0]) / 6;
@@ -119,7 +119,7 @@ REGIONS.forEach((reg, ri) => {
       MONSTERS[mid] = { id: mid, kind: k, name: `${adj ? adj + ' ' : ''}${kind.name}`, el: mel, ai: kind.ai, hp: kind.hp, dmg: kind.dmg, spd: kind.spd, size: kind.size, tint: ELEMENT_TINT[mel], lv: lv[0] + ki * Math.max(1, Math.floor(span / 3)) };
       return mid;
     });
-    MAPS[id] = { id, kind: 'field', name, region: reg.id, biome, lv, w: 72, h: 56, monsters: mons, density: 34 + mi * 2, fieldBoss: boss, bossRespawn: 300, exits: [], index: mi };
+    MAPS[id] = { id, kind: 'field', name, region: reg.id, biome, lv, w: 240, h: 180, monsters: mons, density: 300 + mi * 15, fieldBoss: boss, bossRespawn: 300, exits: [], index: mi };
   });
 });
 // Connect: town -> map1 -> ... -> map6 -> next town

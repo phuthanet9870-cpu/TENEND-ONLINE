@@ -15,7 +15,7 @@ export function rollLoot(mon, char, stats, ctx = {}) {
   const mf = (stats.magicFind || 0) + (ctx.mf || 0);
   const lv = mon.lv;
   const boss = !!mon.boss;
-  const itemChance = boss ? 1 : (mon.elite ? 0.4 : 0.09) * (1 + mf / 200) * (ctx.treasure ? 2 : 1);
+  const itemChance = boss ? 1 : (mon.elite ? 0.4 : 0.09) * (1 + mf / 200) * (ctx.treasure ? 2 : 1) * (ctx.rate || 1);
   const nItems = boss ? (mon.bossKind === 'raid' ? 4 : mon.bossKind === 'world' ? 3 : 2) + (Math.random() < 0.5 ? 1 : 0) : (R() < itemChance ? 1 : 0);
   for (let i = 0; i < nItems; i++) {
     const it = generateItem(R, { ilvl: lv + (boss ? 3 : 0), classId: R() < 0.6 ? char.classId : null, mf, boss, minRarity: boss && i === 0 ? (mon.bossKind === 'raid' ? 'epic' : 'rare') : null });
@@ -29,7 +29,7 @@ export function rollLoot(mon, char, stats, ctx = {}) {
   if (R() < (boss ? 0.5 : 0.005) && lv >= 100) out.push(mat('mythril', 1));
   if (ctx.abyss && R() < 0.3) out.push(mat('essence', 1 + Math.floor(R() * 2)));
   // runes (Support Runes)
-  if (R() < (boss ? 0.6 : 0.012)) {
+  if (R() < (boss ? 0.6 : 0.012 * (ctx.rate || 1))) {
     const maxTier = lv < 60 ? 1 : lv < 150 ? 2 : 3;
     const pool = RUNES.filter((r) => r.tier <= maxTier);
     const r = pool[Math.floor(R() * pool.length)];

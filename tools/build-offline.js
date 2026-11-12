@@ -16,10 +16,7 @@ const r = await esbuild.build({
 const js = r.outputFiles[0].text.replace(/<\/script/gi, '<\\/script');
 let html = fs.readFileSync('client/index.html', 'utf8');
 const style = html.match(/<style>[\s\S]*<\/style>/)[0]
-  .replace(':root {', ':root { color-scheme:dark;')
-  + `<style>#testbar{position:fixed;right:calc(240px + env(safe-area-inset-right,0px));bottom:calc(10px + env(safe-area-inset-bottom,0px));z-index:200;text-align:right}
-#tb-body{background:var(--panel);border:1px solid var(--gold);border-radius:6px;padding:10px;margin-top:6px;width:330px;text-align:left;display:flex;flex-direction:column;gap:2px}
-#tb-body[hidden]{display:none}#tb-body button{padding:4px 8px;font-size:12px}</style>`;
+  .replace(':root {', ':root { color-scheme:dark;');
 const body = html.match(/<body>([\s\S]*)<\/body>/)[1].replace(/<script type="module"[^>]*><\/script>/, '');
 const out = `<title>TENEND ONLINE</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">

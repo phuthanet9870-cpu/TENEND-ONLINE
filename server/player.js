@@ -255,10 +255,11 @@ export function npcOp(game, sess, m) {
     case 'unstash': { if (!need('stash')) return; const it = acc.stash[m.idx | 0]; if (!it) return; if (c.inv.length >= INVENTORY_SIZE) return game.err(sess, 'กระเป๋าเต็ม'); acc.stash.splice(m.idx | 0, 1); c.inv.push(it); return done(false); }
     // ---- Teleporter ----
     case 'teleport': {
-      if (!need('teleport')) return; const t = TOWNS[m.to]; if (!t) return;
+      if (!need('teleport')) return; const t = MAPS[m.to]; if (!t) return;
       if (c.level < t.lv[0] - 10) return game.err(sess, `ต้องการเลเวล ${t.lv[0] - 10}`);
-      if (c.gold < ECONOMY.teleportGold) return game.err(sess, 'ทองไม่พอ');
-      c.gold -= ECONOMY.teleportGold; game.enterField(sess, t.id, null, null); return;
+      const cost = ECONOMY.teleportGold * (t.kind === 'town' ? 1 : 2);
+      if (c.gold < cost) return game.err(sess, 'ทองไม่พอ');
+      c.gold -= cost; game.enterField(sess, t.id, null, null, t.kind === 'field' ? 'w' : null); return;
     }
   }
 }

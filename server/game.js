@@ -15,6 +15,7 @@ import * as player from './player.js';
 import * as social from './social.js';
 import * as pvp from './pvp.js';
 import * as dungeons from './dungeons.js';
+import * as gm from './gm.js';
 
 const NAME_RE = /^[\p{L}\p{N}_]{3,16}$/u;
 
@@ -32,6 +33,8 @@ export class Game {
       pvpBotFill: +(process.env.PVP_BOT_FILL || 25), // seconds before bots fill a queue (practice, unranked)
       guildWarMin: +(process.env.GUILDWAR_MIN || 1),
     };
+    this.rates = { exp: 1, drop: 1, gold: 1 };
+    this.startedAt = Date.now();
   }
 
   start() {
@@ -97,9 +100,11 @@ export class Game {
     } else if (m.t === 'login') {
       const acc = db.accounts[user];
       if (!acc || !checkPass(pass, acc)) return this.send(sess, { t: 'authErr', text: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' });
+      if (acc.banned) return this.send(sess, { t: 'authErr', text: `บัญชีนี้ถูกระงับ${acc.banReason ? ': ' + acc.banReason : ''}` });
       for (const s of this.sessions) if (s !== sess && s.acc === user) { this.err(s, 'บัญชีนี้ถูกล็อกอินจากที่อื่น'); s.ws.close(); }
     } else return;
     sess.acc = user;
+    gm.onAuth(this, sess);
     this.sendCharList(sess);
   }
   sendCharList(sess) {
@@ -160,8 +165,9 @@ export class Game {
     return {
       ...c, account: undefined,
       stash: db.accounts[c.account]?.stash || [],
-      derived: { hpMax: st.hpMax, mpMax: st.mpMax, atk: st.atk, armor: st.armor, crit: +st.crit.toFixed(1), critDmg: st.critDmg, atkSpd: st.atkSpd, cdr: st.cdr, move: Math.round(st.move), leech: st.leech, dodge: st.dodge, block: st.block, res: st.res, dmgEl: st.dmgEl, ks: [...st.ks], leg: [...st.leg], setBonuses: st.setBonuses, magicFind: st.magicFind, hpRegen: +st.hpRegen.toFixed(1), mpRegen: st.mpRegen, dmgAll: st.dmgAll },
+      derived: { hpMax: st.hpMax, mpMax: st.mpMax, atk: st.atk, armor: st.armor, crit: +st.crit.toFixed(1), critDmg: st.critDmg, atkSpd: st.atkSpd, cdr: st.cdr, move: Math.round(st.move * (sess.unit?.gmSpeed || 1)), leech: st.leech, dodge: st.dodge, block: st.block, res: st.res, dmgEl: st.dmgEl, ks: [...st.ks], leg: [...st.leg], setBonuses: st.setBonuses, magicFind: st.magicFind, hpRegen: +st.hpRegen.toFixed(1), mpRegen: st.mpRegen, dmgAll: st.dmgAll },
       expNext: expToNext(c.level), party: social.partyView(this, sess), guild: social.guildView(this, sess),
+      gm: sess.isGM ? { ...(sess.gmState || {}) } : null, settings: c.settings || {},
     };
   }
   sendChar(sess) { sess.dirty = false; if (sess.char) this.send(sess, { t: 'char', c: this.charView(sess) }); }
@@ -202,6 +208,7 @@ export class Game {
       lastCombat: -99, dodgeReady: 0, countering: 0, counterReady: 0, potionReady: 0, castCount: 0, treads: 0,
     });
     sess.unit = u; sess.inst = inst; sess.seen = new Map();
+    gm.applyUnitState(sess, u);
     inst.players.add(u);
     this.refreshUnit(sess);
     return u;
@@ -231,6 +238,7 @@ export class Game {
       if (inst.kind === 'town') { x = L.pxW / 2; y = L.pxH / 2 + 120; } else [x, y] = randomOpenSpot(L, Math.random);
     }
     this.moveToInstance(sess, inst, x, y);
+    if (sess.unit) sess.unit.portalReady = inst.time + 1.5;
   }
   moveToInstance(sess, inst, x, y, team = 'p') {
     if (sess.unit && sess.inst) { this.saveUnitToChar(sess); sess.inst.removeUnit(sess.unit); }
@@ -311,12 +319,14 @@ export class Game {
       case 'logout': this.saveUnitToChar(sess); pvp.leaveQueues(this, sess); social.onLogout(this, sess); if (inst && u) inst.removeUnit(u); this.online.delete(sess.char.id); sess.char = null; sess.unit = null; sess.inst = null; saveDB(); return this.sendCharList(sess);
       case 'ping': return this.send(sess, { t: 'pong', c: m.c });
       case 'dev': return this.devOp(sess, m);
+      case 'gm': return gm.gmOp(this, sess, m);
+      case 'settings': { const v = JSON.stringify(m.value ?? null); if (typeof m.key !== 'string' || !/^[a-z]{1,16}$/.test(m.key) || v.length > 8000) return; c0(sess).settings = c0(sess).settings || {}; c0(sess).settings[m.key] = m.value; return; }
     }
   }
 
   // Developer/test commands (enabled only with DEV=1)
   devOp(sess, m) {
-    if (process.env.DEV !== '1') return this.err(sess, 'dev commands disabled');
+    if (process.env.DEV !== '1' && !sess.isGM) return this.err(sess, 'dev commands disabled');
     const c = sess.char;
     if (m.op === 'level') { c.level = Math.max(1, Math.min(MAX_LEVEL, m.n | 0)); c.exp = 0; }
     if (m.op === 'gold') c.gold += Math.max(0, m.n | 0);
@@ -334,7 +344,7 @@ export class Game {
     if (!u || u.dead || inst.safe) return;
     if (isCC(u) || u.statuses.has('silence')) return;
     if (u.lockUntil > inst.time + 0.05) return;
-    const slot = m.slot === 'u' ? 'u' : (m.slot | 0);
+    const slot = m.slot === 'u' ? 'u' : Math.max(0, Math.min(HOTBAR_SIZE - 1, m.slot | 0));
     const id = slot === 'u' ? c.build.ult : c.build.hotbar[slot];
     if (!id) return;
     const spec = u.skillSpecs[id]; if (!spec) return;
@@ -404,7 +414,7 @@ export class Game {
       [u.x, u.y] = moveWithCollision(inst.L, u.x, u.y, u.dodge.dx * sp, u.dodge.dy * sp, 9);
       if (inst.time >= u.dodge.until) u.dodge = null;
     } else if (u.lockUntil <= inst.time && (u.input.mx || u.input.my)) {
-      let sp = s.move * dt;
+      let sp = s.move * dt * (u.gmSpeed || 1);
       if (u.statuses.has('slow')) sp *= 0.6;
       if (u.statuses.has('chill')) sp *= 0.8;
       [u.x, u.y] = moveWithCollision(inst.L, u.x, u.y, u.input.mx * sp, u.input.my * sp, 9);
@@ -412,7 +422,7 @@ export class Game {
     }
     if (u.aimX != null && !u.input.mx && !u.input.my) u.facing = Math.atan2(u.aimY - u.y, u.aimX - u.x);
     const moved = Math.hypot(u.x - ox, u.y - oy); u.treads += moved;
-    if (u.kind === 'player' && (inst.kind === 'field' || inst.kind === 'town')) {
+    if (u.kind === 'player' && (inst.kind === 'field' || inst.kind === 'town') && inst.time > (u.portalReady || 0)) {
       for (const e of inst.L.exits) if ((u.x - e.x) ** 2 + (u.y - e.y) ** 2 < 34 * 34) {
         const target = MAPS[e.to]; if (!target) continue;
         if (target.kind === 'field' && u.level < target.lv[0] - 25) { if (!u.warnedExit) { this.err(u.sess, `ต้องการเลเวล ${target.lv[0] - 25}+ เพื่อเข้า ${target.name}`); u.warnedExit = true; } u.x -= (e.side === 'w' ? -40 : 40); continue; }
@@ -441,12 +451,12 @@ export class Game {
       const c = s.char; const st = s.unit.stats;
       const diff = c.level - mon.lv;
       const pen = diff > 15 ? Math.max(0.1, 1 - (diff - 15) * 0.06) : diff < -20 ? 0.5 : 1;
-      const exp = Math.round((monsterExp(mon.lv) * mult * pen * partyBonus * (1 + (st.expBonus || 0) / 100)) / eligible.size * (mon.boss ? eligible.size : 1));
+      const exp = Math.round(this.rates.exp * (monsterExp(mon.lv) * mult * pen * partyBonus * (1 + (st.expBonus || 0) / 100)) / eligible.size * (mon.boss ? eligible.size : 1));
       this.giveExp(s, exp);
-      const gold = Math.round(monsterGold(mon.lv) * (mon.boss ? 25 : 1) * (1 + (st.goldFind || 0) / 100));
+      const gold = Math.round(this.rates.gold * monsterGold(mon.lv) * (mon.boss ? 25 : 1) * (1 + (st.goldFind || 0) / 100));
       c.gold += gold;
       inst.fx({ k: 'gold', id: s.unit.id, v: gold }, s.unit);
-      for (const d of rollLoot(mon, c, st, { treasure: inst.mods.includes('treasure'), abyss: inst.kind === 'abyss', mf: inst.mfBonus || 0 })) {
+      for (const d of rollLoot(mon, c, st, { rate: this.rates.drop, treasure: inst.mods.includes('treasure'), abyss: inst.kind === 'abyss', mf: inst.mfBonus || 0 })) {
         const a = Math.random() * 6.28, r = 10 + Math.random() * 30;
         const id = inst.nextId();
         inst.drops.set(id, { id, owner: c.id, x: mon.x + Math.cos(a) * r, y: mon.y + Math.sin(a) * r, payload: d, label: d.label, color: d.color, expire: inst.time + 120 });
@@ -507,3 +517,5 @@ export class Game {
   }
 }
 export { healUnit, addStatus };
+
+const c0 = (sess) => sess.char;

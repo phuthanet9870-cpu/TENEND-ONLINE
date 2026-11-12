@@ -1,6 +1,6 @@
 // ===== Dungeons: Story (1-4), Abyss (1-4, random rooms+modifiers), Boss Hunt (1-4), Raid (4-8), Guild Boss =====
 import { DUNGEONS, BOSSES, MONSTERS, ABYSS_MODIFIERS, MAPS } from '../shared/world.js';
-import { instanceLayout, randomOpenSpot } from '../shared/mapgen.js';
+import { instanceLayout, randomOpenSpot, spotNear } from '../shared/mapgen.js';
 import { db, saveDB } from './db.js';
 import { rollLoot } from './loot.js';
 import { RARITY_INFO } from '../shared/constants.js';
@@ -30,7 +30,7 @@ export function dungeonOp(game, sess, m) {
 
 export function createDungeon(game, members, did, opt = {}) {
   const d = DUNGEONS[did] || opt.def;
-  const size = d.type === 'raid' ? [70, 46] : d.type === 'hunt' || d.type === 'guildboss' ? [40, 30] : [60, 40];
+  const size = d.type === 'raid' ? [140, 90] : d.type === 'hunt' || d.type === 'guildboss' ? [56, 42] : d.type === 'abyss' ? [100, 70] : [120, 80];
   const key = `dg:${did}:${Math.random().toString(36).slice(2, 7)}`;
   const L = instanceLayout(key, size, d.biome, d.type === 'hunt' ? 6 : 16);
   const kind = d.type === 'abyss' ? 'abyss' : d.type === 'raid' ? 'raid' : 'dungeon';
@@ -62,8 +62,8 @@ export class DungeonMode {
   }
   spawnGroup(tplId, count, lv) {
     for (let i = 0; i < count; i++) {
-      const [x, y] = randomOpenSpot(this.inst.L, Math.random, 4);
-      if (x < 12 * 32) { i--; continue; }
+      const ps = [...this.inst.players].filter((p) => !p.dead); const anchor = ps[Math.floor(Math.random() * ps.length)] || { x: this.inst.L.pxW / 2, y: this.inst.L.pxH / 2 };
+      const ang = Math.random() * 6.283; const [x, y] = spotNear(this.inst.L, Math.random, anchor.x + Math.cos(ang) * 520, anchor.y + Math.sin(ang) * 520, 260);
       const m = this.inst.spawnMonster(tplId, lv, x, y, { mul: { hp: this.scale }, noRespawn: true });
       m.aggro = 2000; this.alive.add(m.id);
     }
@@ -93,7 +93,9 @@ export class DungeonMode {
   }
   spawnBossNow(bossId, lv, hpMul) {
     const L = this.inst.L;
-    const b = this.inst.spawnBoss(bossId, lv, L.pxW * 0.65, L.pxH / 2, { hpMul: hpMul * this.scale, bossKind: this.d.type === 'raid' ? 'raid' : 'dungeon' });
+    const ps = [...this.inst.players].filter((p) => !p.dead); const a = ps[0] || { x: L.pxW / 2, y: L.pxH / 2 };
+    const [bx, by] = spotNear(L, Math.random, a.x + 420, a.y, 200);
+    const b = this.inst.spawnBoss(bossId, lv, bx, by, { hpMul: hpMul * this.scale, bossKind: this.d.type === 'raid' ? 'raid' : 'dungeon' });
     b.aggro = 3000; this.alive.add(b.id); this.boss = b;
   }
   update(dt) {

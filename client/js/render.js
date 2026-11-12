@@ -1,5 +1,6 @@
 // ===== Canvas renderer: top-down 3/4 pixel-art world, entities, skill FX, telegraphs =====
 import { TILE, ELEMENT_INFO, STATUS_BITS } from '/shared/constants.js';
+import { MAPS } from '/shared/world.js';
 import { charSprite, weaponSprite, monsterSprite, groundTile, plazaTile, obstacleSprite, wallTile, borderTile, shade, drawEmblem } from './sprites.js';
 
 const BIT = Object.fromEntries(STATUS_BITS.map((s, i) => [s, 1 << i]));
@@ -17,11 +18,30 @@ export class Renderer {
   resize() { this.cv.width = window.innerWidth; this.cv.height = window.innerHeight; this.ctx.imageSmoothingEnabled = false; }
   setMap(L) {
     this.L = L; this.fx = []; this.texts = []; this.parts = []; this.projs.clear(); this.orbits.clear();
-    const b = L.biomeDef; const gc = document.createElement('canvas'); gc.width = L.pxW; gc.height = L.pxH; const g = gc.getContext('2d');
-    g.imageSmoothingEnabled = false;
-    this.obstacles = []; this.water = [];
+    this.chunks = new Map(); this.CH = 16; // tiles per chunk side
+    // per-chunk obstacle & water lists (ground is rendered lazily per chunk)
+    const b = L.biomeDef; this.chunkObs = new Map(); this.chunkWater = new Map();
+    const ck = (tx, ty) => `${Math.floor(tx / this.CH)},${Math.floor(ty / this.CH)}`;
     for (let ty = 0; ty < L.h; ty++) for (let tx = 0; tx < L.w; tx++) {
-      const i = ty * L.w + tx, v = L.tiles[i], d = L.deco[i], X = tx * TILE, Y = ty * TILE;
+      const i = ty * L.w + tx, v = L.tiles[i], d = L.deco[i];
+      if (v === 3) { const k = ck(tx, ty); if (!this.chunkObs.has(k)) this.chunkObs.set(k, []); this.chunkObs.get(k).push({ x: tx * TILE + 16, y: ty * TILE + 30, type: b.obstacle[d % b.obstacle.length], seed: d }); }
+      if (v === 2) { const k = ck(tx, ty); if (!this.chunkWater.has(k)) this.chunkWater.set(k, []); this.chunkWater.get(k).push([tx * TILE, ty * TILE, d]); }
+    }
+    // minimap / full map image (1 px per tile scaled later)
+    this.mini.width = L.w; this.mini.height = L.h; const m = this.mini.getContext('2d');
+    const img = m.createImageData(L.w, L.h);
+    const hex = (c) => { if (c.startsWith('rgb')) { const n = c.match(/\d+/g).map(Number); return n; } const n = parseInt(c.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+    const cols = { 0: hex(b.ground[0]), 1: hex(b.path), 2: hex(b.water), 3: [34, 64, 30], 4: [20, 18, 26], 5: [120, 60, 40], 6: hex(b.path) };
+    for (let i = 0; i < L.tiles.length; i++) { const c = cols[L.tiles[i]] || cols[0]; img.data[i * 4] = c[0]; img.data[i * 4 + 1] = c[1]; img.data[i * 4 + 2] = c[2]; img.data[i * 4 + 3] = 255; }
+    m.putImageData(img, 0, 0);
+  }
+  chunk(cx, cy) {
+    const key = cx + ',' + cy; let c = this.chunks.get(key);
+    if (c) { this.chunks.delete(key); this.chunks.set(key, c); return c; }
+    const L = this.L, b = L.biomeDef, CH = this.CH;
+    c = document.createElement('canvas'); c.width = CH * TILE; c.height = CH * TILE; const g = c.getContext('2d'); g.imageSmoothingEnabled = false;
+    for (let ty = cy * CH; ty < Math.min(L.h, cy * CH + CH); ty++) for (let tx = cx * CH; tx < Math.min(L.w, cx * CH + CH); tx++) {
+      const i = ty * L.w + tx, v = L.tiles[i], d = L.deco[i], X = (tx - cx * CH) * TILE, Y = (ty - cy * CH) * TILE;
       if (v === 4) { g.drawImage(borderTile(L.biome), X, Y); continue; }
       if (v === 5) { const below = ty + 1 < L.h ? L.tiles[i + L.w] : 0; g.drawImage(wallTile(below === 5), X, Y); continue; }
       const nz = Math.sin(tx * 0.21 + 1.3) + Math.sin(ty * 0.17 + 0.7) + Math.sin((tx + ty) * 0.09) + Math.sin((tx - ty) * 0.13);
@@ -29,19 +49,10 @@ export class Renderer {
       if (v === 1) col = b.path;
       if (v === 6) g.drawImage(plazaTile(d), X, Y);
       else g.drawImage(groundTile(col, d, v === 0 && d % 7 === 0 ? 1 : 0), X, Y);
-      if (v === 2) this.water.push([X, Y, d]);
-      if (v === 3) this.obstacles.push({ x: X + 16, y: Y + 30, type: b.obstacle[d % b.obstacle.length], seed: d });
     }
-    // edge exits
-    for (const e of L.exits) { g.fillStyle = 'rgba(120,200,255,0.25)'; g.fillRect(e.x - 16, e.y - 80, 32, 160); }
-    this.ground = gc;
-    // minimap
-    const s = 3; this.mini.width = L.w * s; this.mini.height = L.h * s; const m = this.mini.getContext('2d');
-    for (let ty = 0; ty < L.h; ty++) for (let tx = 0; tx < L.w; tx++) {
-      const v = L.tiles[ty * L.w + tx];
-      m.fillStyle = v === 2 ? b.water : v === 3 ? '#1e3a1a' : v >= 4 && v <= 5 ? '#222' : v === 1 || v === 6 ? b.path : b.ground[0];
-      m.fillRect(tx * s, ty * s, s, s);
-    }
+    this.chunks.set(key, c);
+    if (this.chunks.size > 80) this.chunks.delete(this.chunks.keys().next().value);
+    return c;
   }
   w2s(x, y) { return [Math.round(x - this.cam.x + this.cv.width / 2), Math.round(y - this.cam.y + this.cv.height / 2)]; }
   s2w(x, y) { return [x + this.cam.x - this.cv.width / 2, y + this.cam.y - this.cv.height / 2]; }
@@ -106,18 +117,20 @@ export class Renderer {
     ctx.save(); ctx.translate(sx, sy);
     // ground
     const x0 = Math.round(this.cam.x - W / 2), y0 = Math.round(this.cam.y - H / 2);
-    const srcX = Math.max(0, x0), srcY = Math.max(0, y0), srcW = Math.min(this.L.pxW, x0 + W) - srcX, srcH = Math.min(this.L.pxH, y0 + H) - srcY;
-    if (srcW > 0 && srcH > 0) ctx.drawImage(this.ground, srcX, srcY, srcW, srcH, srcX - x0, srcY - y0, srcW, srcH);
+    const CS = this.CH * TILE;
+    const cx0 = Math.max(0, Math.floor(x0 / CS)), cy0 = Math.max(0, Math.floor(y0 / CS)), cx1 = Math.min(Math.ceil(this.L.w / this.CH) - 1, Math.floor((x0 + W) / CS)), cy1 = Math.min(Math.ceil(this.L.h / this.CH) - 1, Math.floor((y0 + H) / CS));
+    const visKeys = [];
+    for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) { ctx.drawImage(this.chunk(cx, cy), cx * CS - x0, cy * CS - y0); visKeys.push(cx + ',' + cy); }
     // water shimmer
     const wc = this.L.biomeDef.water;
-    for (const [X, Y, d] of this.water) {
-      if (X < x0 - 32 || X > x0 + W || Y < y0 - 32 || Y > y0 + H) continue;
+    for (const k of visKeys) for (const [X, Y, d] of this.chunkWater.get(k) || []) {
       ctx.fillStyle = wc; ctx.fillRect(X - x0, Y - y0, 32, 32);
       ctx.fillStyle = 'rgba(255,255,255,0.18)'; const o = ((this.t * 12 + d) % 32) | 0; ctx.fillRect(X - x0 + o % 28, Y - y0 + ((d >> 3) % 24), 6, 2);
     }
     // ground FX (areas, telegraphs, traps, objectives)
     this.drawObjectives(ctx);
     this.drawGroundFx(ctx);
+    this.drawNavAndTarget(ctx);
     // drops
     for (const d of G.drops) {
       const [x, y] = this.w2s(d[1], d[2]);
@@ -129,11 +142,13 @@ export class Renderer {
     }
     // y-sorted world objects
     const list = [];
-    for (const o of this.obstacles) if (o.x > x0 - 40 && o.x < x0 + W + 40 && o.y > y0 - 20 && o.y < y0 + H + 60) list.push({ y: o.y, o });
+    const oKeys = new Set(visKeys); for (const k of visKeys) { const [a, b2] = k.split(',').map(Number); oKeys.add(a + ',' + (b2 + 1)); }
+    for (const k of oKeys) for (const o of this.chunkObs.get(k) || []) if (o.x > x0 - 40 && o.x < x0 + W + 40 && o.y > y0 - 20 && o.y < y0 + H + 60) list.push({ y: o.y, o });
+    for (const e of this.L.exits) list.push({ y: e.y + 20, portal: e });
     for (const u of G.units.values()) list.push({ y: u.y, u });
     for (const n of G.npcs) list.push({ y: n.y, n });
     list.sort((a, b) => a.y - b.y);
-    for (const it of list) { if (it.o) { const [x, y] = this.w2s(it.o.x, it.o.y); ctx.drawImage(obstacleSprite(it.o.type, it.o.seed), x - 16, y - 52); } else if (it.u) this.drawUnit(ctx, it.u); else this.drawNpc(ctx, it.n); }
+    for (const it of list) { if (it.o) { const [x, y] = this.w2s(it.o.x, it.o.y); ctx.drawImage(obstacleSprite(it.o.type, it.o.seed), x - 16, y - 52); } else if (it.u) this.drawUnit(ctx, it.u); else if (it.portal) this.drawPortal(ctx, it.portal); else this.drawNpc(ctx, it.n); }
     this.drawProjectiles(ctx, dt);
     this.drawAirFx(ctx);
     this.drawOrbits(ctx);
@@ -367,23 +382,56 @@ export class Renderer {
     if (o.corePos) { const [x, y] = this.w2s(o.corePos[0], o.corePos[1]); ctx.strokeStyle = '#ffd84a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(x, y, 150, 75, 0, 0, 7); ctx.stroke(); ctx.fillStyle = `rgba(255,216,74,${0.2 + Math.sin(this.t * 3) * 0.1})`; ctx.fill(); ctx.fillStyle = '#ffd84a'; ctx.font = 'bold 14px Tahoma'; ctx.fillText(`CORE ${o.core || 0}%`, x, y - 80); }
   }
 
-  drawMinimap(mc) {
-    const G = this.g; if (!this.L) return;
-    const c = mc.getContext('2d'); const W = mc.width, H = mc.height;
-    c.fillStyle = '#000'; c.fillRect(0, 0, W, H);
-    const sc = Math.min(W / this.L.w, H / this.L.h) / 3;
-    const ox = (W - this.L.w * 3 * sc) / 2, oy = (H - this.L.h * 3 * sc) / 2;
-    c.imageSmoothingEnabled = false; c.drawImage(this.mini, ox, oy, this.L.w * 3 * sc, this.L.h * 3 * sc);
-    const k = (3 * sc) / TILE;
-    for (const e of this.L.exits) { c.fillStyle = '#7fe8ff'; c.fillRect(ox + e.x * k - 3, oy + e.y * k - 3, 6, 6); }
-    for (const n of G.npcs) { c.fillStyle = '#ffd84a'; c.fillRect(ox + n.x * k - 2, oy + n.y * k - 2, 4, 4); }
+  drawPortal(ctx, e) {
+    const [x, y] = this.w2s(e.x, e.y); if (x < -100 || x > this.cv.width + 100 || y < -150 || y > this.cv.height + 100) return;
+    const t = this.t;
+    ctx.save(); ctx.translate(x, y - 30);
+    for (let i = 0; i < 3; i++) { ctx.strokeStyle = ['#7fe8ff', '#c25cff', '#ffffff'][i]; ctx.globalAlpha = 0.8 - i * 0.2; ctx.lineWidth = 4 - i; ctx.beginPath(); ctx.ellipse(0, 0, 26 - i * 6, 40 - i * 9, 0, t * (2 + i) + i, t * (2 + i) + i + 4.5); ctx.stroke(); }
+    ctx.globalAlpha = 0.25 + Math.sin(t * 3) * 0.1; ctx.fillStyle = '#7fe8ff'; ctx.beginPath(); ctx.ellipse(0, 0, 22, 36, 0, 0, 7); ctx.fill();
+    ctx.restore(); ctx.globalAlpha = 1;
+    const name = MAPS[e.to]?.name || e.to; const lv = MAPS[e.to]?.lv;
+    ctx.font = 'bold 12px Kanit, Tahoma'; ctx.textAlign = 'center'; ctx.fillStyle = '#000'; ctx.fillText(`ประตูวาร์ป → ${name}`, x + 1, y - 79); ctx.fillStyle = '#7fe8ff'; ctx.fillText(`ประตูวาร์ป → ${name}`, x, y - 80);
+    if (lv && MAPS[e.to].kind === 'field') { ctx.font = '11px Kanit, Tahoma'; ctx.fillStyle = '#ffd84a'; ctx.fillText(`Lv ${lv[0]}-${lv[1]}`, x, y - 66); }
+  }
+  drawNavAndTarget(ctx) {
+    const A = this.g.auto; if (!A) return;
+    const me = this.g.units.get(this.g.you);
+    if (A.nav.path && me) {
+      ctx.strokeStyle = 'rgba(127,232,255,0.55)'; ctx.setLineDash([6, 8]); ctx.lineWidth = 2; ctx.beginPath();
+      let [px, py] = this.w2s(me.x, me.y); ctx.moveTo(px, py);
+      for (const [wx, wy] of A.nav.path) { [px, py] = this.w2s(wx, wy); ctx.lineTo(px, py); }
+      ctx.stroke(); ctx.setLineDash([]);
+      ctx.strokeStyle = '#7fe8ff'; ctx.beginPath(); ctx.ellipse(px, py, 10 + Math.sin(this.t * 6) * 2, 5, 0, 0, 7); ctx.stroke();
+    }
+    const t = A.target && this.g.units.get(A.target);
+    if (t) { const [x, y] = this.w2s(t.x, t.y); const r = (t.meta?.r || 12) + 8; ctx.strokeStyle = A.on ? '#5aff7a' : '#ff5a5a'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(x, y + 2, r, r * 0.42, 0, this.t * 2, this.t * 2 + 5); ctx.stroke(); }
+    if (this.clickMark && this.t - this.clickMark.t0 < 0.5) { const [x, y] = this.w2s(this.clickMark.x, this.clickMark.y); const a = (this.t - this.clickMark.t0) / 0.5; ctx.strokeStyle = `rgba(255,255,255,${1 - a})`; ctx.beginPath(); ctx.ellipse(x, y, 14 * (1 - a) + 4, (14 * (1 - a) + 4) * 0.5, 0, 0, 7); ctx.stroke(); }
+  }
+  // Draw the map into a canvas. view: {cx, cy, span} world-space window (null = whole map). Returns transform for click mapping.
+  drawMap(mc, view, opts = {}) {
+    const G = this.g; if (!this.L) return null;
+    const c = mc.getContext('2d'); const W = mc.width, H = mc.height; c.imageSmoothingEnabled = false;
+    c.fillStyle = '#05040a'; c.fillRect(0, 0, W, H);
+    let k, ox, oy;
+    if (!view) { k = Math.min(W / this.L.pxW, H / this.L.pxH); ox = (W - this.L.pxW * k) / 2; oy = (H - this.L.pxH * k) / 2; }
+    else { k = W / view.span; ox = W / 2 - view.cx * k; oy = H / 2 - view.cy * k; }
+    c.drawImage(this.mini, ox, oy, this.L.w * TILE * k, this.L.h * TILE * k);
+    const P = (x, y) => [ox + x * k, oy + y * k];
+    if (G.auto?.nav.path) { const me = G.units.get(G.you); c.strokeStyle = '#7fe8ff'; c.lineWidth = 1.5; c.setLineDash([3, 3]); c.beginPath(); c.moveTo(...P(me.x, me.y)); for (const p of G.auto.nav.path) c.lineTo(...P(p[0], p[1])); c.stroke(); c.setLineDash([]); }
+    for (const e of this.L.exits) { const [x, y] = P(e.x, e.y); c.fillStyle = '#7fe8ff'; c.beginPath(); c.arc(x, y, opts.big ? 7 : 4, 0, 7); c.fill(); if (opts.big) { c.font = 'bold 12px Kanit, Tahoma'; c.textAlign = e.side === 'w' ? 'left' : 'right'; c.fillStyle = '#fff'; c.fillText(`🌀 ${MAPS[e.to]?.name || ''}`, x + (e.side === 'w' ? 10 : -10), y - 10); } }
+    for (const n of G.npcs) { const [x, y] = P(n.x, n.y); c.fillStyle = '#ffd84a'; c.fillRect(x - 3, y - 3, 6, 6); if (opts.big) { c.font = '11px Kanit, Tahoma'; c.textAlign = 'center'; c.fillStyle = '#ffe08a'; c.fillText(n.name, x, y - 7); } }
     for (const u of G.units.values()) {
       const m = u.meta || {}; if (u.flags & (1 << 30)) continue;
+      const [x, y] = P(u.x, u.y); if (x < -5 || y < -5 || x > W + 5 || y > H + 5) continue;
       c.fillStyle = u.id === G.you ? '#ffffff' : m.b ? '#ff3a3a' : m.k === 'monster' ? '#d86a4a' : m.tm === G.myTeam ? '#4ad86a' : '#ff6aa8';
-      const s = u.id === G.you ? 5 : m.b ? 6 : 3; c.fillRect(ox + u.x * k - s / 2, oy + u.y * k - s / 2, s, s);
+      const s = u.id === G.you ? 6 : m.b ? 8 : m.k === 'monster' ? 3 : 4; c.fillRect(x - s / 2, y - s / 2, s, s);
+      if (m.b && opts.big) { c.font = 'bold 12px Kanit, Tahoma'; c.textAlign = 'center'; c.fillStyle = '#ff7a5a'; c.fillText(m.n, x, y - 9); }
     }
-    for (const p of G.obj?.pts || []) { c.fillStyle = p[2] === 'A' ? '#4aa8ff' : p[2] === 'B' ? '#ff5a5a' : '#ccc'; c.beginPath(); c.arc(ox + p[0] * k, oy + p[1] * k, 4, 0, 7); c.fill(); }
+    for (const p of G.obj?.pts || []) { const [x, y] = P(p[0], p[1]); c.fillStyle = p[2] === 'A' ? '#4aa8ff' : p[2] === 'B' ? '#ff5a5a' : '#ccc'; c.beginPath(); c.arc(x, y, 5, 0, 7); c.fill(); }
+    const me = G.units.get(G.you); if (me) { const [x, y] = P(me.x, me.y); c.strokeStyle = '#fff'; c.lineWidth = 1; c.beginPath(); c.arc(x, y, 7 + Math.sin(this.t * 5) * 2, 0, 7); c.stroke(); }
+    return { k, ox, oy, toWorld: (sx, sy) => [(sx - ox) / k, (sy - oy) / k] };
   }
+  drawMinimap(mc) { const me = this.g.units.get(this.g.you); if (!me) return; this.miniT = this.drawMap(mc, { cx: me.x, cy: me.y, span: this.miniSpan || 2600 }); }
 }
 const NPC_PAL = {
   shop: { cls: 'gunslinger', body: '#6a4a8a', trim: '#e8c040', skin: '#e6b48a', hair: '#4a2a1a' },

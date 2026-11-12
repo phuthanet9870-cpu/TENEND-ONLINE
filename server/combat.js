@@ -7,7 +7,7 @@ const CC = new Set(['stun', 'freeze', 'silence']);
 const dist2 = (a, b) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
 const now = () => Date.now() / 1000;
 
-export function isHostile(a, b) { return a !== b && !a.dead && !b.dead && a.team !== b.team && b.kind !== 'totem' && !b.untargetable; }
+export function isHostile(a, b) { return a !== b && !a.dead && !b.dead && a.team !== b.team && b.kind !== 'totem' && !b.untargetable && !b.gmInvis; }
 export function isAlly(a, b) { return !b.dead && a.team === b.team && (b.kind === 'player' || b.kind === 'bot'); }
 export const hasStatus = (u, s) => u.statuses.has(s);
 export const isCC = (u) => u.statuses.has('stun') || u.statuses.has('freeze');
@@ -57,7 +57,7 @@ export { heal as healUnit };
 
 // ---- Damage ----
 export function dealDamage(inst, src, tgt, spec, mult = 1, opt = {}) {
-  if (!tgt || tgt.dead || tgt.invuln > inst.time) return 0;
+  if (!tgt || tgt.dead || tgt.invuln > inst.time || tgt.god) return 0;
   if (tgt.iframesUntil > inst.time) { inst.fx({ k: 'dmg', id: tgt.id, v: 0, miss: 1 }, tgt); return 0; }
   const s = src.stats; const ts = tgt.stats;
   const el = spec.chaos ? ELEMENTS[Math.floor(Math.random() * ELEMENTS.length)] : (opt.el || spec.el || 'physical');
@@ -136,7 +136,7 @@ export function dealDamage(inst, src, tgt, spec, mult = 1, opt = {}) {
 }
 
 export function applyRaw(inst, tgt, dmg, src) {
-  if (tgt.dead) return 0;
+  if (tgt.dead || tgt.god) return 0;
   if (tgt.shield > 0) { const a = Math.min(tgt.shield, dmg); tgt.shield -= a; dmg -= a; }
   tgt.hp -= dmg;
   if (tgt.hp <= 0) {

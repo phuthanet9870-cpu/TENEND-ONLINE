@@ -84,7 +84,8 @@ export const GUILD_RANKS = [
   { id: 'recruit', th: 'ทดลองงาน', perm: [] },
 ];
 
-export const HOTBAR_SIZE = 6; // keys 1-6 (+ R for ultimate)
+export const HOTBAR_SIZE = 30; // 3 rows x 10: [1-0], [Shift+1-0], [Alt+1-0] (+ R for ultimate)
+export const HOTBAR_ROWS = 3;
 export const INVENTORY_SIZE = 60;
 export const STASH_SIZE = 80;
 export const GUILD_STORAGE_SIZE = 100;

@@ -287,8 +287,15 @@ export class Instance {
       const due = this.timers.filter((t) => t.at <= this.time);
       if (due.length) { this.timers = this.timers.filter((t) => t.at > this.time); for (const t of due) { try { t.fn(); } catch (e) { console.error('timer', e); } } }
     }
+    const hunters = [];
+    for (const u of this.units.values()) if ((u.kind === 'player' || u.kind === 'bot') && !u.dead) hunters.push(u);
     for (const u of [...this.units.values()]) {
       if (u.dead) continue;
+      if (u.kind === 'monster' && !u.target && !u.returning && !u.statuses.size) {
+        // sleep monsters that no player is near (huge maps stay cheap)
+        let near = false; for (const h of hunters) if ((h.x - u.x) ** 2 + (h.y - u.y) ** 2 < 1500 * 1500) { near = true; break; }
+        if (!near) continue;
+      }
       tickStatuses(this, u, dt);
       if (u.dead) continue;
       if (u.kind === 'player' || u.kind === 'bot') this.game.updatePlayerUnit(this, u, dt);
@@ -416,6 +423,7 @@ export class Instance {
     const out = []; const meta = {}; const R2 = VIEW_RADIUS * VIEW_RADIUS;
     for (const u of this.units.values()) {
       if (u !== p && d2(u, p) > R2 && !(u.boss && u.world)) continue;
+      if (u.gmInvis && u !== p && !p.sess?.isGM) continue;
       let flags = 0; for (const k of u.statuses.keys()) flags |= STATUS_BIT[k] || 0;
       if (u.dead) flags |= 1 << 30;
       out.push([u.id, Math.round(u.x), Math.round(u.y), Math.round((u.hp / u.hpMax) * 1000), flags, Math.round(((u.facing || 0) * 180) / Math.PI), u.shield > 0 ? Math.round((u.shield / u.hpMax) * 1000) : 0]);
