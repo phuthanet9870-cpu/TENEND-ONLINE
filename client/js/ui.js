@@ -720,7 +720,7 @@ export class UI {
       // ---- HUD ----
       case 'hotbarToggle': this.rows = this.rows === 1 ? 3 : 1; try { localStorage.setItem('tenend-hotbar-rows', this.rows); } catch { /* ignore */ } return this.renderHotbar();
       case 'slotClick': { const slot = el.dataset.slot === 'u' ? 'u' : +el.dataset.slot; const id = slot === 'u' ? c.build.ult : c.build.hotbar[slot]; if (!id) return this.openPanel('skills'); const me = this.G.units.get(this.G.you); const t = this.G.auto.target && this.G.units.get(this.G.auto.target); const x = t ? t.x : me.x + Math.cos(me.facing) * 120, y = t ? t.y : me.y + Math.sin(me.facing) * 120; return S({ t: 'cast', slot, x: Math.round(x), y: Math.round(y) }); }
-      case 'equipFree': { const i = c.build.hotbar.findIndex((x) => !x); if (i < 0) return this.toast('Hotbar เต็มแล้ว', '#ff6a6a'); return S({ t: 'build', op: 'equipSkill', slot: i, id: d.id }); }
+      case 'equipFree': return S({ t: 'build', op: 'equipSkill', slot: 'free', id: d.id });
       case 'pot': return S({ t: 'potion', kind: d.k });
       case 'counter': return S({ t: 'counter' });
       case 'autoToggle': this.G.auto.toggle(); return this.renderPanel('auto');
@@ -759,5 +759,6 @@ document.addEventListener('change', (e) => {
   if (el.dataset?.auto) { const k = el.dataset.auto; const val = el.type === 'checkbox' ? el.checked : el.type === 'range' || el.type === 'number' ? +el.value : el.value; ui.saveAuto({ [k]: val }); }
   if (el.dataset?.autoList != null) { const cfg = window.G.auto.cfg; const list = new Set(cfg.list); el.checked ? list.add(el.dataset.autoList) : list.delete(el.dataset.autoList); ui.saveAuto({ list: [...list], targets: 'list' }); }
   if (el.dataset?.askillOff != null) { const off = new Set(window.G.char.settings?.askill?.off || []); const i = +el.dataset.askillOff; el.checked ? off.delete(i) : off.add(i); ui.saveAskill({ off: [...off] }); }
+  if (el.dataset?.pkr) { ui.pk = ui.pk || {}; ui.pk[el.dataset.pkr] = +el.value; ui.renderPanel('smith'); }
   if (el.dataset?.gmself) { const k = el.dataset.gmself; window.G.send({ t: 'gm', op: 'self', [k]: el.type === 'checkbox' ? el.checked : +el.value }); }
 });

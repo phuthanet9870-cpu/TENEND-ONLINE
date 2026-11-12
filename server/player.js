@@ -36,6 +36,7 @@ export function buildOp(game, sess, m) {
   const done = () => { game.refreshUnit(sess); game.markDirty(sess); };
   switch (m.op) {
     case 'equipSkill': {
+      if (m.slot === 'free') { if (c.build.hotbar.includes(m.id)) return; const i = c.build.hotbar.findIndex((x) => !x); if (i < 0) return game.err(sess, 'Hotbar เต็มแล้ว'); m.slot = i; }
       const slot = m.slot === 'u' ? 'u' : m.slot | 0;
       if (m.id == null) { if (slot === 'u') c.build.ult = null; else if (slot >= 0 && slot < HOTBAR_SIZE) c.build.hotbar[slot] = null; return done(); }
       const s = getSkill(m.id);

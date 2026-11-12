@@ -3,6 +3,8 @@ import { getMapLayout, moveWithCollision } from '/shared/mapgen.js';
 import { HOTBAR_SIZE } from '/shared/constants.js';
 import { Renderer } from './render.js';
 import { UI } from './ui.js';
+import { installUI2 } from './ui2.js';
+installUI2(UI);
 import { Auto } from './auto.js';
 
 const G = {
@@ -16,6 +18,7 @@ const renderer = new Renderer(document.getElementById('game'), G);
 G.auto = new Auto(G, renderer);
 const ui = new UI(G, send, renderer);
 G.ui = ui;
+ui.renderChatCh();
 
 function connect() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';

@@ -52,9 +52,9 @@ npm test             # integration test แบบ headless (เล่นวน�
 | ระบบ | รายละเอียด |
 |---|---|
 | คลาส | 10 คลาส: Warrior, Paladin, Ranger, Assassin, Arcanist, Necromancer, Cleric, Shaman, Gunslinger, Monk |
-| สกิล | คลาสละ 100 สกิล = **Active 90 + Ultimate 10** (รวม 1,000 สกิล) ทุกสกิลมี ID คงที่ พฤติกรรม ธาตุ กลไกเฉพาะ และระดับ Rank 1–20 |
+| สกิล | คลาสละ 100 สกิล = **Active 90 + Ultimate 10** • Active ทั้ง 90 สกิลใช้กลไกไม่ซ้ำกันเลย เลือกจากคลัง 125 กลไกแบบ Ragnarok (`shared/signatures.js`) เช่น Bash, Sonic Blow, Storm Gust, Lex Aeterna, Safety Wall, Asura Strike, Fire Wall, Meteor Storm, Napalm Beat, Backstab, Provoke, Kyrie ฯลฯ แต่ละกลไกมีความสามารถ ไอคอน และ VFX ของตัวเอง • คลาสเลือก 90 กลไกตามความถนัด (`CLASS_AFFINITY`) |
 | Support Runes | 39 รูนส่วนกลาง เปลี่ยน **รูปแบบ** สกิล เช่น Split, Chain, Fork, Echo, Nova/Trap/Totem/Orbit/Spirit Conversion, Gravity Well, Mirror, Cascade, Element Shift ฯลฯ (ช่องรูน 1/2/3 ที่ Rank 1/8/16) • ฟิวส์ 3 รูนเป็นรูนระดับสูงขึ้น |
-| Passive Tree | 7 สาย: อาวุธ (แยก melee/ranged/magic) • ธาตุ (8 ธาตุ + เจาะเกราะ) • ความเร็ว • คริติคอล • ดูดเลือด • ป้องกัน • **สายประจำคลาส** พร้อม Keystone ที่เปลี่ยนวิธีเล่น (Berserker, Blood Magic, Momentum, Critical Cascade, Legion, Totem Lord, Sniper, Spellweaver …) |
+| Passive Tree | แบบ Path of Exile: รูปคลาสตรงกลาง เส้นเชื่อมโค้ง กลุ่มโหนดวงแหวน ~230 โหนด (Minor / Notable / Keystone) • 7 สาย: อาวุธ (แยก melee/ranged/magic) • ธาตุ (8 ธาตุ + เจาะเกราะ) • ความเร็ว • คริติคอล • ดูดเลือด • ป้องกัน • **สายประจำคลาส** พร้อม Keystone ที่เปลี่ยนวิธีเล่น (Berserker, Blood Magic, Momentum, Critical Cascade, Legion, Totem Lord, Sniper, Spellweaver …) |
 | Build | Reset Build ด้วยทองในเกม (ฟรีก่อน Lv20) • Build Preset 6 ช่อง ติดแท็ก PvE/PvP สลับได้นอกการต่อสู้ |
 | โลก | 5 เมืองหลัก (96×72 ช่อง) • 30 แมพฟาร์มขนาด 240×180 ช่อง (Lv 1–300) • ประตูวาร์ปเชื่อมแมพ • มอนสเตอร์ 90 ชนิด + Elite • บอสแมพทุกแมพ • บอสโลก 3 ตัวเกิดตามเวลา |
 | ดันเจี้ยน | Story (1–4) 5 แห่ง • Abyss (1–4) ชั้นไม่สิ้นสุด สุ่ม Modifier • Boss Hunt (1–4) เลือกบอสได้ 13 ตัว • Raid (4–8) 2 แห่ง • Guild Boss |
@@ -97,9 +97,17 @@ client/      index.html + js/ (main, render, sprites, ui)
 หลักการสำคัญ: Browser ส่งแค่ **input** (ทิศทาง, ร่ายสกิลช่องไหน, หลบ, เก็บของ) — เซิร์ฟเวอร์เป็นผู้ตัดสินตำแหน่ง ดาเมจ คูลดาวน์ ทรัพยากร ดรอป และการซื้อขายทั้งหมด
 Snapshot ส่ง 10 ครั้ง/วินาที เฉพาะสิ่งที่อยู่ในรัศมีมองเห็น (interest management) และ projectile ถูกจำลองฝั่ง client เพื่อลด bandwidth
 
+## UI
+
+- ทุกตัวเลือกเป็นไอคอน (ไม่มี dropdown): ช่องอุปกรณ์ ชนิดอาวุธ ตัวเร่ง เซ็ต รูน บอส มอนสเตอร์ แมพ ตรากิลด์ ช่องแชท
+- กระเป๋าแบบ Ragnarok: ตัวละครตรงกลาง อุปกรณ์สองข้าง กระเป๋าแบ่งหมวด (ทั้งหมด/อุปกรณ์/การ์ด/ใช้งาน/วัตถุดิบ/รูน) ไอคอนไอเทม pixel art วาดด้วยโค้ด
+- แผนที่โลกวาดเป็นภาพ (ภูเขาหิมะ ป่า ทะเลทราย ภูเขาไฟ ชายฝั่ง) คลิกจุดเพื่อดูข้อมูล: มอนสเตอร์ การ์ดที่ดรอป บอส บริการ NPC และแมพที่เชื่อมกัน
+- หน้าต่างจัดเรียงข้างกันอัตโนมัติไม่ทับกัน HUD แต่ละส่วนมีตำแหน่งตายตัวไม่ซ้อนกัน
+
 ## การต่อยอด
 
 - **เพิ่มคลาส**: เพิ่ม object ใน `CLASSES` (`shared/classes.js`) — 9 schools + 10 ultimates + passives แล้วเพิ่มอาวุธใน `WEAPON_TYPES` ระบบจะสร้าง 100 สกิลให้อัตโนมัติ (ถ้าต้องการชุดหัว pixel art ใหม่ เพิ่มใน `HEAD` ที่ `client/js/sprites.js`)
+- **เพิ่มกลไกสกิล**: เพิ่ม `S(...)` ใน `shared/signatures.js` (+ ตัวทำงานพิเศษใน `server/sigexec.js` และสไตล์ VFX ใน `client/js/vfx.js` ถ้าต้องการ) คลาสจะเลือกไปใช้ตามความถนัดเอง
 - **เพิ่มรูน**: เพิ่ม object ใน `RUNES` พร้อม `apply(spec)` — สกิลเดิมไม่ต้องแก้
 - **เพิ่มโหนด Passive**: ต่อท้าย chain ใน `BRANCHES` หรือเพิ่ม branch ใหม่ — ID เดิมไม่เปลี่ยน save เดิมใช้ได้ (โหนดที่ถูกลบจะถูกล้างอัตโนมัติ)
 - **เพิ่ม Legendary**: เพิ่มใน `LEGENDARIES` (items.js) และใส่ผลใน `LEGENDARY_SKILL_MODS` (skills.js) หรือใน combat
