@@ -1,0 +1,16 @@
+{
+  "name": "tenend-online",
+  "version": "0.1.0",
+  "description": "TENEND ONLINE - HTML5 Online Action RPG (Top-down 3/4 pixel art)",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "test": "node tools/selftest.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "engines": { "node": ">=18" }
+}
