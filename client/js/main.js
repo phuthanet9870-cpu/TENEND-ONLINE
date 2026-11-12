@@ -17,7 +17,7 @@ G.ui = ui;
 
 function connect() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  G.ws = new WebSocket(`${proto}://${location.host}/ws`);
+  G.ws = window.TENEND_LOCAL ? window.TENEND_LOCAL() : new WebSocket(`${proto}://${location.host}/ws`);
   G.ws.onopen = () => { G.connected = true; ui.onConnect(); };
   G.ws.onclose = () => { G.connected = false; ui.onDisconnect(); setTimeout(connect, 2000); };
   G.ws.onmessage = (ev) => onMsg(JSON.parse(ev.data));

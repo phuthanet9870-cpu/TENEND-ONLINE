@@ -7,10 +7,16 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
-    "test": "node tools/selftest.js"
+    "test": "node tools/selftest.js",
+    "build:offline": "node tools/build-offline.js"
   },
   "dependencies": {
     "ws": "^8.18.0"
   },
-  "engines": { "node": ">=18" }
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "esbuild": "^0.23.1"
+  }
 }
