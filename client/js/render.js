@@ -1,6 +1,7 @@
 // ===== Canvas renderer: top-down 3/4 pixel-art world, entities, skill FX, telegraphs =====
 import { TILE, ELEMENT_INFO, STATUS_BITS } from '/shared/constants.js';
 import { MAPS } from '/shared/world.js';
+import { drawProjectile, drawImpact, drawField } from './vfx.js';
 import { charSprite, weaponSprite, monsterSprite, groundTile, plazaTile, obstacleSprite, wallTile, borderTile, shade, drawEmblem } from './sprites.js';
 
 const BIT = Object.fromEntries(STATUS_BITS.map((s, i) => [s, 1 << i]));
@@ -63,7 +64,7 @@ export class Renderer {
     switch (e.k) {
       case 'proj': {
         const p = this.projs.get(e.id) || { trail: [] };
-        Object.assign(p, { x: e.x, y: e.y, vx: e.vx, vy: e.vy, r: e.r, el: e.el, until: now + e.life + 0.05, m: e.m });
+        Object.assign(p, { x: e.x, y: e.y, vx: e.vx, vy: e.vy, r: e.r, el: e.el, until: now + e.life + 0.05, m: e.m, v: e.v || p.v });
         this.projs.set(e.id, p); break;
       }
       case 'pend': { const p = this.projs.get(e.id); if (p) { this.burst(p.x, p.y, elc(p.el), 6); this.projs.delete(e.id); } break; }
@@ -93,7 +94,8 @@ export class Renderer {
       case 'matk': this.swing.set(e.id, { t0: now, ang: e.ang, beh: 'melee', wind: e.wind }); break;
       case 'orbit': this.orbits.set(e.id, { owner: e.owner, n: e.n, r: e.r, until: now + e.dur, el: e.el }); break;
       case 'orbitEnd': this.orbits.delete(e.id); break;
-      case 'buff': this.fx.push({ kind: 'ring', x: 0, y: 0, follow: e.id, el: e.el, t0: now, r: 50 }); break;
+      case 'buff': this.fx.push({ kind: 'ring', x: 0, y: 0, follow: e.id, el: e.el, t0: now, r: 50 }); { const u = G.units.get(e.id); if (u && e.v) this.fx.push({ k: 'area', x: u.x, y: u.y, follow: e.id, shape: 'circle', r: 46, el: e.el, delay: 0, dur: 0, v: e.v === 'parry' || e.v === 'steel' ? 'runes' : e.v === 'rage' ? 'explosion' : e.v === 'wind' ? 'rings' : e.v === 'note' ? 'heal' : e.v === 'enchant' ? 'sparkle' : e.v, t0: now }); } break;
+      case 'hop': { const u = G.units.get(e.id); if (u) u.anim = { x1: u.x, y1: u.y, x2: u.x, y2: u.y, t0: now, dur: Math.min(1, e.dur), leap: 1 }; break; }
       case 'lvl': { const u = G.units.get(e.id); if (u) { this.fx.push({ kind: 'ring', follow: e.id, el: 'holy', t0: now, r: 90 }); this.text(u.x, u.y - 70, 'LEVEL UP!', '#7fe8ff', 18, 2); } break; }
       case 'counter': this.fx.push({ kind: 'ring', follow: e.id, el: 'lightning', t0: now, r: 40, fast: 1 }); break;
       case 'dodge': this.fx.push({ kind: 'ghost', id: e.id, t0: now }); break;
@@ -272,6 +274,7 @@ export class Renderer {
       ctx.strokeStyle = c; ctx.globalAlpha = 0.5; ctx.lineWidth = Math.max(2, p.r * 0.8); ctx.beginPath();
       p.trail.forEach(([tx, ty], i) => { const [sx, sy] = this.w2s(tx, ty); i ? ctx.lineTo(sx, sy) : ctx.moveTo(sx, sy); }); ctx.stroke(); ctx.globalAlpha = 1;
       const [x, y] = this.w2s(p.x, p.y);
+      if (!p.m && drawProjectile(ctx, p, x, y, c, g, this.t)) continue;
       const rr = Math.max(3, p.r);
       ctx.fillStyle = p.m ? '#ff5a3a' : c; ctx.fillRect(x - rr, y - rr, rr * 2, rr * 2);
       ctx.fillStyle = g; ctx.fillRect(x - rr / 2, y - rr / 2, rr, rr);
@@ -325,10 +328,13 @@ export class Renderer {
       }
       const a = age - (f.delay || 0);
       if (f.dur) { // lingering field
-        ctx.globalAlpha = 0.18 + Math.sin(this.t * 6) * 0.06; ctx.fillStyle = col; this.shapePath(ctx, f, x, y); ctx.fill('evenodd');
+        const tint = drawField(ctx, f, x, y, this.t, col, elg(f.el));
+        ctx.globalAlpha = 0.18 + Math.sin(this.t * 6) * 0.06; ctx.fillStyle = tint || col; this.shapePath(ctx, f, x, y); ctx.fill('evenodd');
         ctx.globalAlpha = 0.5; ctx.strokeStyle = col; ctx.lineWidth = 1; this.shapePath(ctx, f, x, y); ctx.stroke(); ctx.globalAlpha = 1;
         if (Math.random() < 0.3) this.parts.push({ x: f.x + (Math.random() - 0.5) * (f.r || 60), y: f.y + (Math.random() - 0.5) * (f.r || 60) * 0.6, vx: 0, vy: -40, c: col, t0: this.t, life: 0.5 });
       } else { // impact burst
+        if (f.ghost) continue;
+        if (f.v && drawImpact(ctx, f, x, y, Math.min(1, a / 0.4), col, elg(f.el))) { if (a < 0.05 && !f.burst) { f.burst = 1; this.burst(f.x, f.y, col, 6); } continue; }
         const p = Math.min(1, a / 0.3);
         ctx.globalAlpha = (1 - p) * 0.55; ctx.fillStyle = col; this.shapePath(ctx, f, x, y, f.melee ? 0.6 + p * 0.4 : 0.4 + p * 0.6); ctx.fill('evenodd');
         ctx.globalAlpha = 1 - p; ctx.strokeStyle = elg(f.el); ctx.lineWidth = 3; this.shapePath(ctx, f, x, y, 0.4 + p * 0.6); ctx.stroke(); ctx.globalAlpha = 1;

@@ -1,9 +1,11 @@
 // ===== Skill generation + resolution =====
-// Each class: 9 schools x 10 variants = 90 Active Skills, + 10 Ultimate Skills = 100.
+// Each class: 90 Active Skills (each a different signature mechanic, see signatures.js) + 10 Ultimate Skills = 100.
 // IDs are stable ("warrior.cleave.3", "warrior.ult.0") so new classes / nodes / runes never break saves.
 import { CLASSES, CLASS_BY_ID } from './classes.js';
 import { RUNE_BY_ID, runeFits, runeSlotsForRank } from './runes.js';
 import { ELEMENT_INFO, PVP_DEFAULT } from './constants.js';
+import { SIGS, CLASS_AFFINITY, ELEM_ADJ, FAMILIES } from './signatures.js';
+import { hashStr } from './rng.js';
 
 export const BEHAVIOR = {
   melee: { th: 'โจมตีระยะประชิดเป็นรูปพัด', dmg: 130, cd: 0.55, cost: 4, range: 85, radius: 85, arc: 110, windup: 0.12 },
@@ -91,34 +93,57 @@ function makeBase(behavior, school, overrides) {
 
 function describe(def) {
   const s = def.base, beh = BEHAVIOR[s.behavior];
-  const parts = [`${beh.th} ธาตุ${ELEMENT_INFO[s.el].th}`];
-  if (s.mech && MECH_TH[s.mech]) parts.push(MECH_TH[s.mech]);
-  if (def.variantTh) parts.push(def.variantTh);
+  const parts = def.sig ? [def.variantTh, `ธาตุ${ELEMENT_INFO[s.el].th}`] : [`${beh.th} ธาตุ${ELEMENT_INFO[s.el].th}`];
+  if (s.mech && MECH_TH[s.mech] && !def.sig) parts.push(MECH_TH[s.mech]);
+  if (def.variantTh && !def.sig) parts.push(def.variantTh);
   if (s.behavior === 'buff' && s.buff) parts.push('บัฟ: ' + Object.entries(s.buff).map(([k, v]) => `${k}+${v}`).join(', ') + ` (${s.duration.toFixed(0)}วิ)`);
   if (s.behavior === 'summon') parts.push(`อัญเชิญ ${s.minion} x${s.count} (${s.duration.toFixed(0)}วิ)`);
   if (s.behavior === 'heal') parts.push(`ฟื้นฟู ${Math.round(s.heal)}% พลังโจมตี`);
   return parts.join(' • ');
 }
 
+const ULT_ICON = { leap: '☄', orbit: '🌀', buff: '🔥', beam: '🌟', totem: '🚩', melee: '⚔', barrage: '💫', ground: '🌋', heal: '😇', nova: '💥', summon: '👑', dash: '⚡', projectile: '🎯', chain: '⛈', trap: '🕸' };
+const g2 = (g) => g.id;
+const DMG_FAM = new Set(['strike', 'sweep', 'shot', 'spell']);
 const ALL_SKILLS = new Map();
+export { FAMILIES };
 const CLASS_SKILLS = {};
 
 export function generateClassSkills(cls) {
   const list = [];
-  cls.schools.forEach((school, si) => {
-    VARIANTS.forEach((v, vi) => {
-      const base = makeBase(school.b, school, school.p);
-      v.f(base);
-      const idx = vi * 9 + si;
-      const adj = ADJ[school.el][vi];
-      const def = {
-        id: `${cls.id}.${school.id}.${vi}`, classId: cls.id, kind: 'active', school: school.id, variant: v.id, variantTh: v.th,
-        name: adj ? `${adj} ${school.noun}` : school.noun, behavior: school.b, el: base.el,
-        unlock: idx < 3 ? 1 : Math.min(298, Math.round(1 + idx * 3.33)), base,
-      };
-      def.desc = describe(def);
-      list.push(def);
-    });
+  const aff = CLASS_AFFINITY[cls.id] || {};
+  const offElement = (g) => g.el && g.el !== 'class' && g.el !== 'physical' && !cls.elements.includes(g.el);
+  const chosen = SIGS.map((g) => ({ g, score: (aff[g.fam] ?? 1) * 10 + (hashStr(cls.id + ':' + g.id) % 10) - (offElement(g) ? 100 : 0) }))
+    .sort((a, b) => b.score - a.score).slice(0, 90).map((x) => x.g)
+    .sort((a, b) => a.tier - b.tier || (aff[b.fam] ?? 1) - (aff[a.fam] ?? 1) + (DMG_FAM.has(b.fam) - DMG_FAM.has(a.fam)) * 0 || (hashStr(cls.id + g2(a)) % 997) - (hashStr(cls.id + g2(b)) % 997));
+  // the three level-1 skills are the class's bread-and-butter attacks
+  const topDmg = Math.max(...[...DMG_FAM].map((f) => aff[f] ?? 0));
+  const starters = chosen.filter((g) => g.tier === 1 && DMG_FAM.has(g.fam) && (aff[g.fam] ?? 0) >= topDmg - 1 && g.b !== 'trap').sort((a, b) => (aff[b.fam] ?? 0) - (aff[a.fam] ?? 0)).slice(0, 3);
+  const ordered = [...starters, ...chosen.filter((g) => !starters.includes(g))];
+  chosen.length = 0; chosen.push(...ordered);
+  const nonPhys = cls.elements.filter((e) => e !== 'physical');
+  chosen.forEach((g, idx) => {
+    const h = hashStr(cls.id + '/' + g.id);
+    let el;
+    if (g.el === 'class') el = nonPhys[0] || 'physical';
+    else if (g.el) el = cls.elements.includes(g.el) ? g.el : (g.el === 'physical' ? 'physical' : nonPhys[h % Math.max(1, nonPhys.length)] || 'physical');
+    else if (['strike', 'sweep', 'shot', 'move'].includes(g.fam)) el = cls.elements.includes('physical') && h % 2 ? 'physical' : cls.elements[h % cls.elements.length];
+    else if (['spell', 'control'].includes(g.fam)) el = nonPhys.length ? nonPhys[h % nonPhys.length] : cls.elements[0];
+    else el = cls.elements[0];
+    const base = makeBase(g.b, { el, mech: g.p.mech || null }, g.p);
+    base.sig = g.id; base.v = g.v; base.fam = g.fam;
+    if (g.p.extra) base.extraStatus = [...g.p.extra];
+    if (g.p.erupt) { base.linger = g.p.erupt * 0.4; base.tick = 0.4; }
+    base.dmg *= 1 + (g.tier - 1) * 0.15;
+    let name = g.names?.[el];
+    const dealsDmg = (g.p.dmg ?? BEHAVIOR[g.b].dmg) > 0 && DMG_FAM.has(g.fam) || g.fam === 'control' && (g.p.dmg ?? 0) > 0;
+    if (!name) name = (ELEM_ADJ[el] && !g.el && dealsDmg ? `${ELEM_ADJ[el]} ` : '') + g.name;
+    const def = {
+      id: `${cls.id}.${g.id}`, classId: cls.id, kind: 'active', school: g.fam, sig: g.id, icon: g.icon, name, behavior: g.b, el: base.el,
+      unlock: idx < 3 ? 1 : Math.min(298, Math.round(1 + idx * 3.33)), base, tier: g.tier, variantTh: g.th,
+    };
+    def.desc = describe(def);
+    list.push(def);
   });
   cls.ultimates.forEach((u, ui) => {
     const base = makeBase(u.b, { el: u.el, mech: u.mech }, u.p);
@@ -131,7 +156,7 @@ export function generateClassSkills(cls) {
     base.cd = 45 + ui * 4; base.cost = 35; base.windup = Math.max(base.windup, 0.25);
     const def = {
       id: `${cls.id}.ult.${ui}`, classId: cls.id, kind: 'ultimate', school: 'ultimate', variant: 'ultimate', name: u.name,
-      behavior: u.b, el: u.el, unlock: 20 + ui * 31, base, variantTh: 'อัลติเมท: พลังทำลายล้างมหาศาล',
+      behavior: u.b, el: u.el, unlock: 20 + ui * 31, base, variantTh: 'อัลติเมท: พลังทำลายล้างมหาศาล', icon: ULT_ICON[u.b] || '🌟',
     };
     def.desc = describe(def);
     list.push(def);

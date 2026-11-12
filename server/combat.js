@@ -1,13 +1,15 @@
 // ===== Server-side combat: skill execution, damage, statuses, minions =====
 import { ELEMENTS } from '../shared/constants.js';
 import { moveWithCollision, canStand } from '../shared/mapgen.js';
+import { execSig } from './sigexec.js';
 
 const BEH_CAT = { melee: 'dmgMelee', dash: 'dmgMelee', leap: 'dmgMelee', orbit: 'dmgMelee', projectile: 'dmgRanged', barrage: 'dmgRanged', beam: 'dmgRanged', nova: 'dmgSpell', ground: 'dmgSpell', chain: 'dmgSpell', trap: 'dmgSpell', totem: 'dmgSpell', summon: 'dmgSpell' };
 const CC = new Set(['stun', 'freeze', 'silence']);
 const dist2 = (a, b) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
 const now = () => Date.now() / 1000;
 
-export function isHostile(a, b) { return a !== b && !a.dead && !b.dead && a.team !== b.team && b.kind !== 'totem' && !b.untargetable && !b.gmInvis; }
+export function isHostile(a, b) { return a !== b && !a.dead && !b.dead && a.team !== b.team && b.kind !== 'totem' && !b.untargetable && !b.gmInvis && !(b.statuses && b.statuses.has('stealth')); }
+export const slowMul = (u) => { const s = u.statuses.get('slow'); return s ? 1 - Math.min(90, s.power || 40) / 100 : 1; };
 export function isAlly(a, b) { return !b.dead && a.team === b.team && (b.kind === 'player' || b.kind === 'bot'); }
 export const hasStatus = (u, s) => u.statuses.has(s);
 export const isCC = (u) => u.statuses.has('stun') || u.statuses.has('freeze');
@@ -22,7 +24,8 @@ export function addStatus(inst, u, type, dur, data = {}) {
     if (data.stacks) cur.stacks = Math.min(data.max || 99, (cur.stacks || 1) + data.stacks);
     if (data.dps) cur.dps = Math.max(cur.dps, data.dps);
     if (data.src) cur.src = data.src;
-  } else u.statuses.set(type, { t: dur, stacks: data.stacks || 1, dps: data.dps || 0, src: data.src, stats: data.stats, tick: 0 });
+    if (data.power) cur.power = Math.max(cur.power || 0, data.power);
+  } else u.statuses.set(type, { t: dur, stacks: data.stacks || 1, dps: data.dps || 0, src: data.src, stats: data.stats, tick: 0, power: data.power });
   if (data.stats) refreshStats(u);
 }
 
@@ -60,7 +63,8 @@ export function dealDamage(inst, src, tgt, spec, mult = 1, opt = {}) {
   if (!tgt || tgt.dead || tgt.invuln > inst.time || tgt.god) return 0;
   if (tgt.iframesUntil > inst.time) { inst.fx({ k: 'dmg', id: tgt.id, v: 0, miss: 1 }, tgt); return 0; }
   const s = src.stats; const ts = tgt.stats;
-  const el = spec.chaos ? ELEMENTS[Math.floor(Math.random() * ELEMENTS.length)] : (opt.el || spec.el || 'physical');
+  let el = spec.chaos ? ELEMENTS[Math.floor(Math.random() * ELEMENTS.length)] : (opt.el || spec.el || 'physical');
+  if (src.enchant && src.enchant.until > inst.time && el === 'physical') el = src.enchant.el;
   if (src.statuses.has('blind') && Math.random() < 0.3) { inst.fx({ k: 'dmg', id: tgt.id, v: 0, miss: 1 }, tgt); return 0; }
   if ((tgt.kind === 'player' || tgt.kind === 'bot') && ts.dodge && Math.random() * 100 < ts.dodge) { inst.fx({ k: 'dmg', id: tgt.id, v: 0, miss: 1 }, tgt); return 0; }
   const owner = src.owner ? inst.units.get(src.owner) || src : src;
@@ -82,7 +86,10 @@ export function dealDamage(inst, src, tgt, spec, mult = 1, opt = {}) {
   if (tgt.statuses.has('mark')) base *= 1.2;
   if (tgt.statuses.has('weak')) base *= 2;
   if (src.statuses.has('weaken')) base *= 0.75;
-  if (spec.execute && tgt.hp / tgt.hpMax < spec.execute) base *= 2;
+  if (spec.execute && tgt.hp / tgt.hpMax < spec.execute) base *= spec.execMul || 2;
+  if (spec.pctHp && !opt.dot) base = Math.max(base * 0.3, tgt.hp * (spec.pctHp / 100) * (tgt.boss ? 0.08 : (tgt.kind === 'player' || tgt.kind === 'bot') ? 0.5 : 1));
+  if (tgt.statuses.has('lex') && !opt.dot) { base *= 2; tgt.statuses.delete('lex'); inst.fx({ k: 'pop', id: tgt.id, text: 'LEX x2', c: '#ffd84a' }, tgt); }
+  if (src.statuses.has('stealth') && !opt.dot) { base *= 1.5; src.statuses.delete('stealth'); }
   if (spec.shatter && (tgt.statuses.has('freeze') || tgt.statuses.has('chill'))) { base *= 2.5; tgt.statuses.delete('freeze'); tgt.statuses.delete('chill'); inst.fx({ k: 'pop', id: tgt.id, text: 'SHATTER!', c: '#bff0ff' }, tgt); }
   let crit = false;
   if (!opt.dot) {
@@ -93,7 +100,7 @@ export function dealDamage(inst, src, tgt, spec, mult = 1, opt = {}) {
     if (crit) { base *= 1 + (s.critDmg || 50) / 100; if (ks.has('assassinate') && isCC(tgt)) base *= 1.5; }
   }
   // mitigation
-  const armor = ts.armor || 0;
+  const armor = (ts.armor || 0) * (tgt.statuses.has('sunder') ? 0.6 : 1);
   if (el === 'physical' && !opt.dot) base *= 1 - armor / (armor + 60 + (s.level || 1) * 22);
   else if (!opt.dot) base *= 1 - (armor * 0.4) / (armor * 0.4 + 60 + (s.level || 1) * 22);
   const res = Math.max(-50, Math.min(75, ((ts.res && ts.res[el]) || 0) - ((s.pen && s.pen[el]) || 0)));
@@ -123,6 +130,7 @@ export function dealDamage(inst, src, tgt, spec, mult = 1, opt = {}) {
     if (spec.healOnHit && !owner.dead) heal(inst, owner, owner.hpMax * spec.healOnHit / 100 * 0.3, { silent: true });
     if (ks.has('battlepriest')) for (const a of inst.allies(owner, 350)) heal(inst, a, dmg * 0.1, { silent: true });
     if (ts.ks?.has('thorns') && src !== tgt && !src.dead) applyRaw(inst, src, Math.round(dmg * 0.3), tgt);
+    if (ts.reflect && src !== tgt && !src.dead) applyRaw(inst, src, Math.round(dmg * ts.reflect / 100), tgt);
     if (crit && ks.has('critcascade')) for (const k in owner.cd || {}) owner.cd[k] -= 0.2;
     if (crit && s.leg?.has('tempest') && (owner.tempestCd || 0) < inst.time) {
       owner.tempestCd = inst.time + 0.5;
@@ -172,11 +180,26 @@ export function applyMech(inst, src, tgt, spec, dmg, opt = {}) {
       }
       case 'shock': addStatus(inst, tgt, 'shock', 4); break;
       case 'stun': if (Math.random() < 0.35 * sp) addStatus(inst, tgt, 'stun', 0.9 * cc * Math.min(1.8, sp)); break;
-      case 'slow': addStatus(inst, tgt, 'slow', 2.5 * cc); break;
+      case 'slow': addStatus(inst, tgt, 'slow', 2.5 * cc, { power: 40 }); break;
       case 'mark': addStatus(inst, tgt, 'mark', 6); break;
       case 'weaken': addStatus(inst, tgt, 'weaken', 5); break;
       case 'blind': addStatus(inst, tgt, 'blind', 3 * cc); break;
+      case 'freeze-hard': addStatus(inst, tgt, 'freeze', 1.5 * cc); break;
     }
+  }
+  if (!opt.dot) {
+    if (spec.sunder) addStatus(inst, tgt, 'sunder', spec.sunder > 1 ? spec.sunder : 3);
+    if (spec.root) addStatus(inst, tgt, 'root', spec.root * cc);
+    if (spec.rootArea) addStatus(inst, tgt, 'root', spec.rootArea * cc);
+    if (spec.knockup) { addStatus(inst, tgt, 'stun', spec.knockup * cc); inst.fx({ k: 'hop', id: tgt.id, dur: spec.knockup }, tgt); }
+    if (spec.silence) addStatus(inst, tgt, 'silence', spec.silence * cc);
+    if (spec.lex) addStatus(inst, tgt, 'lex', 8);
+    if (spec.petrify) { addStatus(inst, tgt, 'freeze', spec.petrify * cc); if (!tgt.boss) inst.fx({ k: 'pop', id: tgt.id, text: 'STONE', c: '#a8a8a8' }, tgt); }
+    if (spec.taunt && tgt.kind === 'monster') { tgt.target = owner.id; tgt.tauntUntil = inst.time + spec.taunt; }
+    if (spec.fear && !tgt.boss) addStatus(inst, tgt, 'fear', spec.fear * cc, { src: owner.id });
+    if (spec.debuffSlow) addStatus(inst, tgt, 'slow', spec.debuffSlow * cc, { power: 70 });
+    if (spec.slowField) addStatus(inst, tgt, 'slow', 0.8, { power: spec.slowField });
+    if (spec.slowHit) addStatus(inst, tgt, 'slow', spec.slowHit * cc, { power: 60 });
   }
   if (spec.knock && !opt.dot) push(inst, tgt, opt.cx ?? src.x, opt.cy ?? src.y, spec.knock * (pvp ? 0.5 : 1));
   if (spec.pull && opt.cx != null) push(inst, tgt, opt.cx, opt.cy, -Math.min(120, Math.sqrt((tgt.x - opt.cx) ** 2 + (tgt.y - opt.cy) ** 2) * 0.8));
@@ -228,6 +251,7 @@ export function castSkill(inst, caster, spec, tx, ty, opt = {}) {
   if (spec.spiritMode && !opt.fromMinion) { spawnMinion(inst, caster, 'spirit', { ...spec, spiritMode: false }, 12, caster.x, caster.y); return post(); }
   if (spec.trapMode && spec.behavior !== 'trap') { placeTrap(inst, caster, spec, ...clampTarget(320), mult); return post(); }
   if (spec.orbitMode) { addOrbit(inst, caster, spec, mult); return post(); }
+  if (spec.sig && execSig(inst, caster, spec, tx, ty, mult, opt)) return post();
   const b = spec.behavior;
   const delayW = spec.windup || 0;
   switch (b) {
@@ -373,6 +397,7 @@ export function castSkill(inst, caster, spec, tx, ty, opt = {}) {
   return post();
 
   function post() {
+    if (opt.sigSub) return;
     if (spec.selfShield) caster.shield = Math.min(caster.hpMax * 0.6, (caster.shield || 0) + caster.hpMax * spec.selfShield / 100 * (1 + (caster.stats.shieldPower || 0) / 100) * (inst.isPvp ? 0.6 : 1));
     if (spec.selfHaste || caster.stats.ks?.has('kite')) addStatus(inst, caster, 'haste', 2, { stats: { move: spec.selfHaste ? 30 : 15 } });
     if (spec.echo && !opt.echo) for (let e = 1; e <= spec.echo; e++) inst.timer(0.5 * e, () => { if (!caster.dead) castSkill(inst, caster, spec, tx, ty, { ...opt, mult: mult * (spec.echoMul || 0.6), echo: true }); });
@@ -381,7 +406,8 @@ export function castSkill(inst, caster, spec, tx, ty, opt = {}) {
 
 function totemSubSpec(spec) {
   const healing = spec.mech === 'heal';
-  return { ...spec, behavior: healing ? 'heal' : 'projectile', dmg: spec.dmg, heal: healing ? 40 : 0, speed: 520, radius: 10, count: 1, range: spec.range || 450, totemMode: false, echo: 0, windup: 0, selfShield: 0, selfHaste: false, pierce: spec.pierce || 0 };
+  if (spec.totemChain) return { ...spec, behavior: 'chain', chain: spec.totemChain, range: 420, totemMode: false, echo: 0, windup: 0, sig: null, selfShield: 0, selfHaste: false };
+  return { ...spec, sig: null, behavior: healing ? 'heal' : 'projectile', dmg: spec.dmg, heal: healing ? 40 : 0, speed: 520, radius: 10, count: 1, range: spec.range || 450, totemMode: false, echo: 0, windup: 0, selfShield: 0, selfHaste: false, pierce: spec.pierce || 0 };
 }
 
 function cleanse(u) { for (const k of ['stun', 'freeze', 'slow', 'chill', 'poison', 'burn', 'bleed', 'blind', 'weaken', 'silence']) u.statuses.delete(k); }
@@ -421,6 +447,7 @@ const MINION_KINDS = {
   angel: { hp: 0.4, spd: 150, range: 300, ranged: true, sprite: 'angel', healer: true },
   drone: { hp: 0.25, spd: 180, range: 320, ranged: true, sprite: 'drone', fly: true },
   spirit: { hp: 0.3, spd: 160, range: 380, ranged: true, sprite: 'spirit', fly: true },
+  decoy: { hp: 0.8, spd: 0, range: 0, ranged: false, sprite: 'clone', passive: true },
 };
 
 export function spawnMinion(inst, owner, kind, spec, dur, x, y) {
@@ -469,6 +496,7 @@ export function updateMinion(inst, m, dt) {
     return;
   }
   const mk = m.mk;
+  if (mk.passive) return;
   let tgt = m.target && inst.units.get(m.target);
   if (!tgt || tgt.dead || dist2(tgt, owner) > 600 * 600) { tgt = inst.nearestEnemy(owner, 450, m.x, m.y); m.target = tgt?.id; }
   let mx = 0, my = 0;
@@ -487,7 +515,7 @@ export function updateMinion(inst, m, dt) {
     if (d > 70) { mx = (owner.x - m.x) / d; my = (owner.y - m.y) / d; }
   }
   if (mx || my) {
-    const sp = m.stats.move * dt * (m.statuses.has('slow') ? 0.6 : 1);
+    const sp = m.stats.move * dt * slowMul(m) * (m.statuses.has('root') ? 0 : 1);
     if (mk.fly) { m.x += mx * sp; m.y += my * sp; }
     else [m.x, m.y] = moveWithCollision(inst.L, m.x, m.y, mx * sp, my * sp, m.r * 0.6);
     m.facing = Math.atan2(my, mx);

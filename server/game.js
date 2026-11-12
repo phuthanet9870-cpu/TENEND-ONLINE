@@ -1,7 +1,7 @@
 // ===== Game: sessions, world instances, player simulation, rewards =====
 import { db, nextId, hashPass, checkPass, saveDB } from './db.js';
 import { Instance } from './instance.js';
-import { castSkill, isCC, addStatus, refreshStats, healUnit } from './combat.js';
+import { castSkill, isCC, addStatus, refreshStats, healUnit, slowMul } from './combat.js';
 import { rollLoot, monsterExp, monsterGold } from './loot.js';
 import { CLASSES, CLASS_BY_ID } from '../shared/classes.js';
 import { classSkills, getSkill, resolveSkill } from '../shared/skills.js';
@@ -415,7 +415,7 @@ export class Game {
       if (inst.time >= u.dodge.until) u.dodge = null;
     } else if (u.lockUntil <= inst.time && (u.input.mx || u.input.my)) {
       let sp = s.move * dt * (u.gmSpeed || 1);
-      if (u.statuses.has('slow')) sp *= 0.6;
+      sp *= slowMul(u); if (u.statuses.has('root')) sp = 0;
       if (u.statuses.has('chill')) sp *= 0.8;
       [u.x, u.y] = moveWithCollision(inst.L, u.x, u.y, u.input.mx * sp, u.input.my * sp, 9);
       u.facing = Math.atan2(u.input.my, u.input.mx);

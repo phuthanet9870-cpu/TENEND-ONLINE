@@ -189,3 +189,83 @@ export function drawEmblem(ctx, x, y, s, em) {
   ctx.fillText({ sword: '⚔', skull: '☠', crown: '♛', dragon: '🐉', sun: '☀', moon: '☾' }[em.icon] || '⚔', 0, 1);
   ctx.restore();
 }
+
+// ---------------- Item / material / rune icons (32x32 pixel art -> data URL, cached) ----------------
+const ICON_TIER_METAL = ['#8a6a4a', '#9aa0a8', '#b8c0c8', '#c8d0d8', '#7fe8ff', '#9a8aff', '#ff7a5a', '#ffe08a', '#c25cff', '#ffffff', '#ffd84a'];
+function iconCanvas(key, draw) {
+  if (cache.has(key)) return cache.get(key);
+  const c = canvas(32, 32); const x = c.getContext('2d'); x.imageSmoothingEnabled = false;
+  const P = (a, b, w, h, col) => { x.fillStyle = col; x.fillRect(a, b, w, h); };
+  draw(P, x);
+  const url = c.toDataURL(); cache.set(key, url); return url;
+}
+export function slotIcon(slot, metal = '#b8c0c8', gem = '#5ad8ff') {
+  return iconCanvas(`si|${slot}|${metal}|${gem}`, (P, x) => {
+    const d = shade(metal, -0.35), l = shade(metal, 0.35);
+    switch (slot) {
+      case 'helm': P(8, 8, 16, 12, metal); P(6, 14, 20, 6, metal); P(10, 6, 12, 4, l); P(8, 20, 4, 6, d); P(20, 20, 4, 6, d); P(12, 16, 8, 2, '#222'); P(15, 3, 2, 5, gem); break;
+      case 'chest': P(8, 6, 16, 22, metal); P(4, 8, 6, 10, d); P(22, 8, 6, 10, d); P(12, 6, 8, 4, '#222'); P(15, 12, 2, 14, l); P(10, 24, 12, 2, d); P(14, 16, 4, 4, gem); break;
+      case 'gloves': P(6, 10, 10, 14, metal); P(16, 8, 10, 14, metal); P(6, 22, 10, 4, d); P(16, 20, 10, 4, d); P(8, 6, 2, 6, l); P(18, 4, 2, 6, l); P(10, 14, 3, 3, gem); break;
+      case 'boots': P(6, 6, 8, 18, metal); P(6, 22, 12, 6, d); P(18, 8, 8, 16, metal); P(18, 22, 12, 6, d); P(8, 8, 2, 12, l); P(20, 10, 2, 10, l); break;
+      case 'belt': P(2, 13, 28, 7, '#6a4a2a'); P(2, 13, 28, 2, '#8a6a3a'); P(12, 11, 9, 11, metal); P(14, 13, 5, 7, '#222'); P(15, 15, 3, 3, gem); break;
+      case 'amulet': x.strokeStyle = l; x.lineWidth = 2; x.beginPath(); x.arc(16, 10, 9, 0.2, Math.PI - 0.2); x.stroke(); P(11, 17, 10, 10, metal); P(13, 19, 6, 6, gem); P(14, 20, 2, 2, '#fff'); break;
+      case 'ring': case 'ring1': case 'ring2': x.strokeStyle = metal; x.lineWidth = 4; x.beginPath(); x.arc(16, 19, 8, 0, 7); x.stroke(); P(12, 5, 8, 8, gem); P(13, 6, 3, 3, '#fff'); P(11, 11, 10, 2, d); break;
+      case 'offhand': x.fillStyle = metal; x.beginPath(); x.moveTo(5, 5); x.lineTo(27, 5); x.lineTo(27, 16); x.lineTo(16, 29); x.lineTo(5, 16); x.closePath(); x.fill(); x.fillStyle = d; x.fillRect(14, 7, 4, 18); x.fillRect(8, 12, 16, 4); P(14, 12, 4, 4, gem); break;
+      case 'card': P(6, 3, 20, 26, '#f0e8d0'); P(7, 4, 18, 24, '#d8c8a0'); P(9, 6, 14, 12, '#2a3a5a'); P(9, 20, 14, 2, '#8a6a3a'); P(9, 24, 10, 2, '#8a6a3a'); break;
+      case 'weapon': P(14, 4, 4, 18, metal); P(10, 20, 12, 3, '#d9b25a'); P(15, 23, 2, 6, '#6a4a2a'); break;
+      default: P(8, 8, 16, 16, metal);
+    }
+  });
+}
+export function weaponIcon(wtype, metal) {
+  return iconCanvas(`wi|${wtype}|${metal}`, (P, x) => {
+    x.save(); x.translate(16, 16); x.rotate(-Math.PI / 4); x.drawImage(weaponSprite(wtype), -18, -9, 36, 18); x.restore();
+    if (metal) { x.globalCompositeOperation = 'source-atop'; x.fillStyle = metal; x.globalAlpha = 0.25; x.fillRect(0, 0, 32, 32); }
+  });
+}
+export function itemIconURL(it) {
+  if (!it) return '';
+  if (it.type === 'card') return cardIcon(it.card);
+  const tier = Math.min(10, Math.floor((it.ilvl || 1) / 30));
+  const metal = ICON_TIER_METAL[tier];
+  const gem = { common: '#a0a0a0', magic: '#5aa2ff', rare: '#ffe14a', epic: '#c25cff', legendary: '#ff9a2a', mythic: '#ff3a5a' }[it.rarity] || '#5ad8ff';
+  if (it.slot === 'weapon') return weaponIcon(it.wtype || 'sword', metal);
+  return slotIcon(it.slot, metal, gem);
+}
+export function cardIcon(cardId) {
+  return iconCanvas(`ci|${cardId}`, (P, x) => {
+    P(5, 2, 22, 28, '#f0e0b0'); P(6, 3, 20, 26, '#c8a860'); P(8, 5, 16, 15, '#1e2a40');
+    const mid = String(cardId).replace(/^card_/, ''); const kind = mid.split('_').pop();
+    try { x.drawImage(monsterSprite(kind, '#c86a4a'), 8, 5, 16, 15); } catch { /* ignore */ }
+    P(8, 22, 16, 2, '#6a4a2a'); P(8, 25, 11, 2, '#6a4a2a');
+  });
+}
+export function matIconURL(id) {
+  return iconCanvas(`mi|${id}`, (P, x) => {
+    switch (id) {
+      case 'ore': P(6, 14, 10, 10, '#7a7a82'); P(14, 10, 12, 12, '#9a9aa2'); P(10, 18, 14, 8, '#6a6a72'); P(16, 12, 4, 3, '#d8d8e0'); P(9, 17, 3, 2, '#c8a860'); break;
+      case 'dust': for (let i = 0; i < 14; i++) P(8 + ((i * 7) % 16), 12 + ((i * 5) % 14), 3, 3, i % 2 ? '#a0e0ff' : '#e0f8ff'); P(14, 6, 4, 4, '#fff'); break;
+      case 'shard': x.fillStyle = '#ff9a2a'; x.beginPath(); x.moveTo(16, 3); x.lineTo(24, 16); x.lineTo(16, 29); x.lineTo(8, 16); x.fill(); P(15, 7, 2, 18, '#ffe08a'); break;
+      case 'essence': x.fillStyle = '#9a5cff'; x.beginPath(); x.arc(16, 16, 11, 0, 7); x.fill(); x.fillStyle = '#d8b8ff'; x.beginPath(); x.arc(13, 12, 4, 0, 7); x.fill(); P(15, 15, 3, 3, '#fff'); break;
+      case 'core': x.fillStyle = '#ff3a5a'; x.beginPath(); x.moveTo(16, 28); x.lineTo(4, 14); x.arc(10, 11, 6, Math.PI, 0); x.arc(22, 11, 6, Math.PI, 0); x.closePath(); x.fill(); P(9, 9, 4, 3, '#ffa0b0'); break;
+      case 'mythril': P(4, 12, 24, 10, '#7fe8ff'); P(6, 10, 20, 4, '#c8f8ff'); P(4, 20, 24, 2, '#3a98b8'); break;
+      case 'guildsigil': x.fillStyle = '#ffd84a'; x.beginPath(); x.arc(16, 17, 11, 0, 7); x.fill(); P(14, 2, 4, 8, '#d83a2a'); x.fillStyle = '#8a6a1a'; x.font = 'bold 12px serif'; x.textAlign = 'center'; x.fillText('G', 16, 22); break;
+      case 'gold': for (let i = 0; i < 4; i++) { P(6 + i * 3, 20 - i * 4, 14, 5, '#ffd84a'); P(6 + i * 3, 20 - i * 4, 14, 1, '#fff0a0'); } break;
+      case 'hp': case 'mp': { const c = id === 'hp' ? '#e83a3a' : '#3a7ae8'; P(13, 4, 6, 6, '#c8a860'); P(14, 8, 4, 4, '#e0e8f0'); x.fillStyle = '#e0e8f0'; x.beginPath(); x.arc(16, 20, 10, 0, 7); x.fill(); x.fillStyle = c; x.beginPath(); x.arc(16, 21, 8, 0, 7); x.fill(); P(11, 16, 3, 3, '#fff'); break; }
+      default: P(8, 8, 16, 16, '#888');
+    }
+  });
+}
+export function runeIconURL(id, tier = 1) {
+  return iconCanvas(`ri|${id}|${tier}`, (P, x) => {
+    const col = ['#7fe8ff', '#c25cff', '#ff9a2a'][tier - 1] || '#7fe8ff';
+    x.fillStyle = '#4a4a5a'; x.beginPath(); x.moveTo(16, 2); x.lineTo(28, 10); x.lineTo(26, 26); x.lineTo(16, 30); x.lineTo(6, 26); x.lineTo(4, 10); x.closePath(); x.fill();
+    x.fillStyle = '#6a6a7a'; x.beginPath(); x.moveTo(16, 4); x.lineTo(25, 10); x.lineTo(16, 14); x.lineTo(7, 10); x.fill();
+    x.fillStyle = col; x.font = 'bold 15px serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.fillText('ᚠᚢᚦᚨᚱᚲᚷᚹᚺᚾᛁᛃᛇᛈᛉᛊᛏᛒᛖᛗᛚᛜᛞᛟ'[[...id].reduce((a, ch) => a + ch.charCodeAt(0), 0) % 24], 16, 19);
+  });
+}
+export function bossPortrait(kind, tint) {
+  return iconCanvas(`bp|${kind}|${tint}`, (P, x) => { const g = x.createRadialGradient(16, 16, 2, 16, 16, 18); g.addColorStop(0, '#3a2a4a'); g.addColorStop(1, '#120f1c'); x.fillStyle = g; x.fillRect(0, 0, 32, 32); x.drawImage(monsterSprite(kind, tint), 0, 0, 32, 32); });
+}
+export function charPortrait(cls, pal, w = 18, h = 30) { const c = canvas(w * 4, h * 4); const x = c.getContext('2d'); x.imageSmoothingEnabled = false; x.drawImage(charSprite(cls, pal, 0), 0, 0, w * 4, h * 4); return c; }

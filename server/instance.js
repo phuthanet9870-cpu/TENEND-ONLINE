@@ -3,7 +3,8 @@ import { TILE, VIEW_RADIUS, STATUS_BITS } from '../shared/constants.js';
 import { moveWithCollision, canStand, randomOpenSpot } from '../shared/mapgen.js';
 import { monsterStats } from '../shared/stats.js';
 import { MONSTERS, BOSSES, BOSS_ATTACKS } from '../shared/world.js';
-import { dealDamage, tickStatuses, updateMinion, inShape, isHostile, isCC, addStatus, doChain, healUnit, castSkill } from './combat.js';
+import { dealDamage, tickStatuses, updateMinion, inShape, isHostile, isCC, addStatus, doChain, healUnit, castSkill, slowMul } from './combat.js';
+import { projectileHit } from './sigexec.js';
 
 let INST_SEQ = 1;
 const STATUS_BIT = Object.fromEntries(STATUS_BITS.map((s, i) => [s, 1 << i]));
@@ -34,14 +35,14 @@ export class Instance {
     a.at = this.time + (a.delay || 0);
     a.until = a.dur ? a.at + a.dur : a.at;
     this.areas.push(a);
-    if (!a.noVis) this.fx({ k: 'area', x: a.x, y: a.y, shape: a.shape, r: a.r, r2: a.r2, ang: a.ang, arc: a.arc, len: a.len, w: a.w, el: a.spec?.el, delay: a.delay, dur: a.dur || 0, trap: a.trap ? 1 : 0, heal: a.healField ? 1 : 0, follow: a.follow, show: a.show ? 1 : 0, melee: a.melee ? 1 : 0 });
+    if (!a.noVis) this.fx({ k: 'area', x: a.x, y: a.y, shape: a.shape, r: a.r, r2: a.r2, ang: a.ang, arc: a.arc, len: a.len, w: a.w, el: a.spec?.el, delay: a.delay, dur: a.dur || 0, trap: a.trap ? 1 : 0, heal: a.healField || a.spec?.safety ? 1 : 0, follow: a.follow, show: a.show ? 1 : 0, melee: a.melee ? 1 : 0, v: a.spec?.v });
     return a;
   }
   projectile(o) {
     const p = { id: this.nextId(), hit: new Set(), dist: 0, ...o };
     p.vx = Math.cos(p.ang) * p.speed; p.vy = Math.sin(p.ang) * p.speed;
     this.projectiles.push(p);
-    this.fx({ k: 'proj', id: p.id, x: Math.round(p.x), y: Math.round(p.y), vx: Math.round(p.vx), vy: Math.round(p.vy), r: p.r, el: p.el || p.spec?.el, life: p.range / p.speed, h: p.homing ? 1 : 0, m: p.monster ? 1 : 0 });
+    this.fx({ k: 'proj', id: p.id, x: Math.round(p.x), y: Math.round(p.y), vx: Math.round(p.vx), vy: Math.round(p.vy), r: p.r, el: p.el || p.spec?.el, life: (p.range / p.speed) * (p.spec?.boomerang ? 2 : 1), h: p.homing ? 1 : 0, m: p.monster ? 1 : 0, v: p.spec?.v });
     return p;
   }
   nearestEnemy(u, range, x = u.x, y = u.y, exclude) {
@@ -97,7 +98,10 @@ export class Instance {
     if (m.boss) return this.updateBoss(m, dt);
     if (m.regen && m.hp < m.hpMax) m.hp = Math.min(m.hpMax, m.hp + m.hpMax * 0.01 * dt);
     if (isCC(m)) { m.attacking = null; return; }
+    const fear = m.statuses.get('fear');
+    if (fear) { const f = this.units.get(fear.src) || m.home; const dx = m.x - f.x, dy = m.y - f.y, l = Math.hypot(dx, dy) || 1; m.attacking = null; [m.x, m.y] = moveWithCollision(this.L, m.x, m.y, (dx / l) * m.stats.move * dt, (dy / l) * m.stats.move * dt, m.r * 0.55); m.facing = Math.atan2(dy, dx); return; }
     let tgt = m.target && this.units.get(m.target);
+    const taunted = m.tauntUntil > this.time && tgt && !tgt.dead;
     if (tgt && (tgt.dead || d2(m, m.home) > 950 * 950 || tgt.untargetable)) {
       tgt = null; m.target = null;
       if (d2(m, m.home) > 950 * 950) { m.returning = true; m.hp = m.hpMax; m.threat = null; }
@@ -106,12 +110,12 @@ export class Instance {
       const near = this.nearestEnemy(m, m.aggro || 240);
       if (near) { tgt = near; m.target = near.id; }
     }
-    if (m.threat && m.threat.size && (!tgt || Math.random() < 0.02)) {
+    if (!taunted && m.threat && m.threat.size && (!tgt || Math.random() < 0.02)) {
       let best = null, bv = -1;
       for (const [id, v] of m.threat) { const t = this.units.get(id); if (t && !t.dead && v > bv) { bv = v; best = t; } }
       if (best && d2(best, m) < 700 * 700) { tgt = best; m.target = best.id; }
     }
-    const sp = m.stats.move * (m.statuses.has('slow') ? 0.6 : 1) * (m.statuses.has('chill') ? 0.75 : 1);
+    const sp = m.stats.move * slowMul(m) * (m.statuses.has('chill') ? 0.75 : 1) * (m.statuses.has('root') ? 0 : 1);
     if (m.attacking) {
       if (this.time >= m.attacking.at) {
         const a = m.attacking; m.attacking = null;
@@ -211,7 +215,7 @@ export class Instance {
     }
     const d = Math.sqrt(d2(b, tgt));
     if (d > b.r + 60) {
-      const sp = b.stats.move * bs.speed * (b.statuses.has('slow') ? 0.7 : 1) * dt;
+      const sp = b.stats.move * bs.speed * (b.statuses.has('slow') ? 0.7 : 1) * (b.statuses.has('root') ? 0.3 : 1) * dt;
       [b.x, b.y] = moveWithCollision(this.L, b.x, b.y, ((tgt.x - b.x) / d) * sp, ((tgt.y - b.y) / d) * sp, b.r * 0.5);
     }
   }
@@ -317,6 +321,8 @@ export class Instance {
         const t = this.nearestEnemy({ ...owner, x: p.x, y: p.y, team: p.team }, 260, p.x, p.y, p.hit);
         if (t) { const want = Math.atan2(t.y - p.y, t.x - p.x); let cur = Math.atan2(p.vy, p.vx); let da = Math.atan2(Math.sin(want - cur), Math.cos(want - cur)); cur += Math.max(-4 * dt, Math.min(4 * dt, da)); p.vx = Math.cos(cur) * p.speed; p.vy = Math.sin(cur) * p.speed; p.dirty = true; }
       }
+      if (p.spec.rehit && this.time >= (p.nextClear || 0)) { p.hit.clear(); p.nextClear = this.time + p.spec.rehit; }
+      if (p.spec.pullProj) for (const t of this.units.values()) if (!t.dead && t.team !== p.team && t.kind === 'monster' && !t.boss && (t.x - p.x) ** 2 + (t.y - p.y) ** 2 < 140 * 140) { const dx = p.x - t.x, dy = p.y - t.y, l = Math.hypot(dx, dy) || 1; [t.x, t.y] = moveWithCollision(this.L, t.x, t.y, (dx / l) * 90 * dt, (dy / l) * 90 * dt, t.r * 0.6); }
       const steps = Math.ceil((p.speed * dt) / 12);
       let alive = true;
       for (let s = 0; s < steps && alive; s++) {
@@ -330,20 +336,25 @@ export class Instance {
           }
           p.hit.add(t.id);
           dealDamage(this, owner, t, p.spec, p.mult, { el: p.el, cx: p.x - p.vx * 0.05, cy: p.y - p.vy * 0.05 });
+          if (p.spec.sig) projectileHit(this, p, owner, t);
           if (p.spec.linger) this.area({ owner: p.owner, team: p.team, x: p.x, y: p.y, shape: 'circle', r: 60, spec: p.spec, mult: p.mult * 0.2, dur: p.spec.linger, tick: 0.5 });
           if (p.chain > 0) { const nx = this.nearestEnemy(owner, 260, t.x, t.y, p.hit); if (nx) { p.chain--; const a = Math.atan2(nx.y - p.y, nx.x - p.x); p.vx = Math.cos(a) * p.speed; p.vy = Math.sin(a) * p.speed; p.dist = Math.max(0, p.dist - 200); p.dirty = true; continue; } }
           if (p.fork > 0) { p.fork--; const base = Math.atan2(p.vy, p.vx); for (const off of [-0.5, 0.5]) { const q = this.projectile({ ...p, id: undefined, hit: new Set(p.hit), dist: 0, ang: base + off, range: p.range * 0.6, fork: 0, chain: 0, pierce: 0 }); q.hit = new Set(p.hit); } }
           if (p.pierce > 0) { p.pierce--; continue; }
           alive = false; break;
         }
-        if (p.dist >= p.range) alive = false;
+        if (p.dist >= p.range) {
+          if (p.spec.boomerang && !p.returning) { p.returning = true; p.dist = 0; p.hit.clear(); const a = Math.atan2(owner.y - p.y, owner.x - p.x); p.vx = Math.cos(a) * p.speed; p.vy = Math.sin(a) * p.speed; p.dirty = true; }
+          else alive = false;
+        }
       }
       if (alive) {
         keep.push(p);
-        if (p.dirty) { p.dirty = false; this.fx({ k: 'proj', id: p.id, x: Math.round(p.x), y: Math.round(p.y), vx: Math.round(p.vx), vy: Math.round(p.vy), r: p.r, el: p.el, life: (p.range - p.dist) / p.speed, upd: 1, m: p.monster ? 1 : 0 }); }
+        if (p.dirty) { p.dirty = false; this.fx({ k: 'proj', id: p.id, x: Math.round(p.x), y: Math.round(p.y), vx: Math.round(p.vx), vy: Math.round(p.vy), r: p.r, el: p.el, life: (p.range - p.dist) / p.speed + (p.returning ? 0 : 0), upd: 1, m: p.monster ? 1 : 0, v: p.spec?.v }); }
       } else {
         this.fx({ k: 'pend', id: p.id, x: p.x, y: p.y });
         if (p.spec.detonate && owner) this.area({ owner: p.owner, team: p.team, x: p.x, y: p.y, shape: 'circle', r: p.spec.detonate, spec: p.spec, mult: p.mult * 0.5, delay: 0, show: true });
+        if (p.spec.cluster && owner) for (let i = 0; i < p.spec.cluster; i++) { const a = (i / p.spec.cluster) * 6.283; this.area({ owner: p.owner, team: p.team, x: p.x + Math.cos(a) * 60, y: p.y + Math.sin(a) * 60, shape: 'circle', r: 50, spec: { ...p.spec, cluster: 0 }, mult: p.mult, delay: 0.25 + i * 0.05, show: true }); }
       }
     }
     this.projectiles = keep;
@@ -374,7 +385,8 @@ export class Instance {
         if (this.time > a.until) continue;
         if (this.time >= a.next) {
           a.next = this.time + (a.tick || 0.5);
-          if (a.healField) for (const t of [owner, ...this.allies(owner, 2000)]) { if (inShape(t, a)) healUnit(this, t, a.healAmt || owner.stats.atk * 0.12, { silent: true }); }
+          if (a.healField || a.spec?.healField) for (const t of [owner, ...this.allies(owner, 2000)]) { if (inShape(t, a)) healUnit(this, t, a.healAmt || owner.stats.atk * 0.12, { silent: true }); }
+          if (a.spec?.safety) for (const t of [owner, ...this.allies(owner, 2000)]) if (inShape(t, a)) t.shield = Math.min(t.hpMax * 0.3, (t.shield || 0) + t.hpMax * 0.04);
           if (a.mult > 0) for (const t of this.hostilesIn(a.team, a)) dealDamage(this, owner, t, a.spec, a.mult, { cx: a.x, cy: a.y });
         }
         keep.push(a); continue;
@@ -412,7 +424,7 @@ export class Instance {
     if (tgt.volatile && !tgt.boss) this.area({ owner: tgt.id, team: tgt.team, x: tgt.x, y: tgt.y, shape: 'circle', r: 70, spec: { dmg: 120, el: 'fire', behavior: 'nova' }, mult: 1, delay: 0.6, show: true, ownerless: true });
     if (killer && killer.stats?.ks?.has('relentless')) for (const k in killer.cd) if (k.includes('step') || k.includes('dash')) killer.cd[k] = 0;
     if (killer && killer.stats?.leg?.has('bloodlust')) { healUnit(this, killer, killer.hpMax * 0.04, { silent: true }); }
-    if (tgt.kind === 'monster') { this.game.onMonsterKilled(this, tgt, killer); if (!this.mode?.keepCorpses) this.timer(1.2, () => this.units.delete(tgt.id)); }
+    if (tgt.kind === 'monster') { (this.corpses = this.corpses || []).push({ x: tgt.x, y: tgt.y, t: this.time }); if (this.corpses.length > 40) this.corpses.shift(); this.game.onMonsterKilled(this, tgt, killer); if (!this.mode?.keepCorpses) this.timer(1.2, () => this.units.delete(tgt.id)); }
     else if (tgt.kind === 'player' || tgt.kind === 'bot') this.game.onPlayerDeath(this, tgt, killer);
     else { if (tgt.kind === 'minion' && tgt.owner) { const o = this.units.get(tgt.owner); if (o?.stats?.ks?.has('soulbound')) healUnit(this, o, o.hpMax * 0.05); } this.units.delete(tgt.id); }
     if (this.mode?.onKill) this.mode.onKill(tgt, killer);

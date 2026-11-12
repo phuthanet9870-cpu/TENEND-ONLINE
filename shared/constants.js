@@ -45,6 +45,12 @@ export const STATUS = {
   buff: { th: 'บัฟ', color: '#ffd060' },
   weak: { th: 'จุดอ่อนเปิด', color: '#ff2a2a' },
   silence: { th: 'ใบ้', color: '#aa66aa', cc: true },
+  root: { th: 'ถูกตรึง', color: '#6a8a3a' },
+  sunder: { th: 'เกราะแตก', color: '#c86a2a' },
+  stealth: { th: 'ล่องหน', color: '#5a5a8a' },
+  lex: { th: 'Lex Aeterna', color: '#ffd84a' },
+  fear: { th: 'หวาดกลัว', color: '#7a2a7a' },
+  parry: { th: 'ท่าปัดป้อง', color: '#e0e0ff' },
 };
 export const STATUS_BITS = Object.keys(STATUS);
 

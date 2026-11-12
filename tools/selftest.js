@@ -69,7 +69,7 @@ const me = (st) => st.snap?.u.find((u) => u[0] === st.you);
   // build ops
   c.send({ t: 'dev', op: 'level', n: 60 }); c.send({ t: 'dev', op: 'gold', n: 200000 }); c.send({ t: 'dev', op: 'mats' }); await sleep(300);
   const ch = c.st.char;
-  c.send({ t: 'build', op: 'allocPassive', node: 'weapon.train' }); await sleep(150);
+  c.send({ t: 'build', op: 'allocPassive', node: 'weapon.t0' }); await sleep(150);
   c.send({ t: 'build', op: 'socketRune', id: ch.build.hotbar[0], idx: 0, rune: 'vampiric' }); await sleep(150);
   c.send({ t: 'build', op: 'rankSkill', id: ch.build.hotbar[0] });
   c.send({ t: 'build', op: 'equipSkill', slot: 'u', id: 'warrior.ult.0' });

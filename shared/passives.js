@@ -11,94 +11,81 @@ export const WEAPON_CATEGORY = {
   staff: 'magic', wand: 'magic', totemstaff: 'magic',
 };
 
-// node spec: [key, name, stats, ranks, opts]
+// Path-of-Exile style tree: each branch = trunk -> ring cluster A (+ notable) -> path -> ring cluster B (+ notable) -> keystone,
+// plus two side ring clusters. Ids are stable strings (`branch.part`), so new branches/clusters never break saves.
 const BRANCHES = [
-  {
-    id: 'weapon', th: 'สายอาวุธ', angle: -90, color: '#e0d6c8',
-    chains: [
-      [['train', 'Weapon Training', { atkPct: 3 }, 5]],
-      [['melee1', 'Blade Discipline', { atkPct: 5, armorPct: 2 }, 5, { cond: 'melee' }], ['melee2', 'Heavy Swings', { dmgMelee: 6 }, 5], ['colossus', 'Colossus (Keystone)', null, 1, { keystone: 'colossus', desc: 'สกิลระยะประชิดพื้นที่ +30% ดาเมจ +10% แต่ความเร็วเคลื่อนที่ -5%' }]],
-      [['ranged1', 'Marksmanship', { atkPct: 5, crit: 1 }, 5, { cond: 'ranged' }], ['ranged2', 'Quick Draw', { dmgRanged: 6 }, 5], ['deadshot', 'Deadshot (Keystone)', null, 1, { keystone: 'deadshot', desc: 'โปรเจกไทล์ทะลุ +1 และโอกาสคริติคอล +10%' }]],
-      [['magic1', 'Channeling', { atkPct: 5, mpPct: 4 }, 5, { cond: 'magic' }], ['magic2', 'Spellpower', { dmgSpell: 6 }, 5], ['spellweaver', 'Spellweaver (Keystone)', null, 1, { keystone: 'spellweaver', desc: 'ทุก 4 สกิลที่ร่าย สกิลถัดไปไม่มีคูลดาวน์' }]],
-    ],
-  },
-  {
-    id: 'element', th: 'สายธาตุ', angle: -30, color: '#ff7a2a',
-    chains: [
-      [['attune', 'Elemental Attunement', { dmgElAll: 3 }, 5], ['status', 'Affliction', { statusPower: 8 }, 5], ['elemaster', 'Elemental Master (Keystone)', null, 1, { keystone: 'elemaster', desc: 'สถานะผิดปกติรุนแรงขึ้น 40% และติดนานขึ้น' }]],
-      ...ELEMENTS.map((el) => [[`${el}1`, `${el[0].toUpperCase() + el.slice(1)} Affinity`, { [`dmg_${el}`]: 6 }, 5], [`${el}2`, `${el[0].toUpperCase() + el.slice(1)} Penetration`, { [`pen_${el}`]: 4 }, 3]]),
-    ],
-  },
-  {
-    id: 'speed', th: 'สายความเร็ว', angle: 30, color: '#a0ffb0',
-    chains: [
-      [['agility', 'Agility', { move: 2 }, 5], ['haste', 'Haste', { atkSpd: 3 }, 5], ['momentum', 'Momentum (Keystone)', null, 1, { keystone: 'momentum', desc: 'หลัง Dash/หลบ ดาเมจ +25% 3 วินาที' }]],
-      [['tempo', 'Tempo', { cdr: 2 }, 5], ['evade', 'Evasive', { dodgeCd: 6 }, 3], ['blur', 'Blur (Keystone)', null, 1, { keystone: 'blur', desc: 'หลบหลีกสร้างเงาลวงที่ดึงความสนใจศัตรู และลดคูลดาวน์หลบ 30%' }]],
-    ],
-  },
-  {
-    id: 'crit', th: 'สายคริติคอล', angle: 90, color: '#ffe14a',
-    chains: [
-      [['precision', 'Precision', { crit: 1.5 }, 5], ['ferocity', 'Ferocity', { critDmg: 8 }, 5], ['critcascade', 'Critical Cascade (Keystone)', null, 1, { keystone: 'critcascade', desc: 'ทุกครั้งที่ติดคริติคอล ลดคูลดาวน์ทุกสกิล 0.2 วินาที' }]],
-      [['weakspot', 'Weak Spot', { dmgBoss: 4 }, 5], ['assassinate', 'Assassinate (Keystone)', null, 1, { keystone: 'assassinate', desc: 'คริติคอลกับเป้าหมายที่ติด CC ดาเมจ x1.5' }]],
-    ],
-  },
-  {
-    id: 'leech', th: 'สายดูดเลือด', angle: 150, color: '#d0203a',
-    chains: [
-      [['thirst', 'Thirst', { leech: 0.8 }, 5], ['vigor', 'Vigor', { hpPct: 3 }, 5], ['bloodmagic', 'Blood Magic (Keystone)', null, 1, { keystone: 'bloodmagic', desc: 'สกิลใช้ HP แทนทรัพยากร (ครึ่งหนึ่ง) ดูดเลือด x1.5' }]],
-      [['regen', 'Regeneration', { hpRegen: 2 }, 5], ['vampaura', 'Vampiric Aura (Keystone)', null, 1, { keystone: 'vampaura', desc: 'ดูดเลือดส่วนเกินกลายเป็นโล่ และแชร์ 20% ให้ปาร์ตี้' }]],
-    ],
-  },
-  {
-    id: 'guard', th: 'สายป้องกัน', angle: 210, color: '#a0e0ff',
-    chains: [
-      [['toughness', 'Toughness', { armorPct: 4 }, 5], ['resilience', 'Resilience', { res: 3 }, 5], ['juggernaut', 'Juggernaut (Keystone)', null, 1, { keystone: 'juggernaut', desc: 'ไม่ถูกผลัก/ดึง และลดดาเมจที่ได้รับ 10%' }]],
-      [['vit', 'Constitution', { vit: 4 }, 5], ['block', 'Parry Training', { block: 2 }, 5]],
-    ],
-  },
+  { id: 'weapon', th: 'สายอาวุธ', color: '#e8d8b8', icon: '⚔', minors: [{ atkPct: 2 }, { atkSpd: 2 }, { critDmg: 4 }],
+    notables: { A: ['Weapon Mastery', { atkPct: 8, atkSpd: 4 }], B: ['Blade Dancer', { atkPct: 10, crit: 3 }], L: ['Brutal Force', { dmgMelee: 14 }], R: ['Steady Aim', { dmgRanged: 14 }] },
+    keystones: { main: ['colossus', 'Colossus', 'สกิลประชิดพื้นที่ +30% ดาเมจ +10% แต่ความเร็ว -5%'], L: ['spellweaver', 'Spellweaver', 'ทุก 5 สกิลที่ร่าย สกิลถัดไปไม่มีคูลดาวน์'], R: ['deadshot', 'Deadshot', 'โปรเจกไทล์ทะลุ +1 และคริติคอล +10%'] } },
+  { id: 'element', th: 'สายธาตุ', color: '#ff8a3a', icon: '🔥', minors: [{ dmgElAll: 2 }, { statusPower: 4 }],
+    notables: { A: ['Elemental Focus', { dmgElAll: 8 }], B: ['Primal Surge', { dmgElAll: 10, statusPower: 12 }], L: ['Fire & Ice', { dmg_fire: 12, dmg_ice: 12, pen_fire: 5, pen_ice: 5 }], R: ['Storm & Venom', { dmg_lightning: 12, dmg_poison: 12, pen_lightning: 5 }] },
+    keystones: { main: ['elemaster', 'Elemental Master', 'สถานะผิดปกติรุนแรงขึ้น 40%'], L: ['__light', 'Light & Shadow', null, { dmg_holy: 15, dmg_shadow: 15, dmg_arcane: 15 }] } },
+  { id: 'speed', th: 'สายความเร็ว', color: '#8affb0', icon: '💨', minors: [{ move: 1.5 }, { atkSpd: 2 }, { cdr: 1 }],
+    notables: { A: ['Fleet Foot', { move: 6 }], B: ['Time Bender', { cdr: 6 }], L: ['Quick Hands', { atkSpd: 8 }], R: ['Escape Artist', { dodgeCd: 15, dodge: 3 }] },
+    keystones: { main: ['momentum', 'Momentum', 'หลัง Dash/หลบ ดาเมจ +25% 3 วินาที'], R: ['blur', 'Blur', 'ลดคูลดาวน์หลบ 30%'] } },
+  { id: 'crit', th: 'สายคริติคอล', color: '#ffe14a', icon: '🎯', minors: [{ crit: 1 }, { critDmg: 5 }],
+    notables: { A: ['Precision', { crit: 4 }], B: ['Lethality', { critDmg: 25 }], L: ['Giant Slayer', { dmgBoss: 10 }], R: ['Eagle Eye', { crit: 3, critDmg: 10 }] },
+    keystones: { main: ['critcascade', 'Critical Cascade', 'คริติคอลลดคูลดาวน์ทุกสกิล 0.2 วิ'], L: ['assassinate', 'Assassinate', 'คริติคอลใส่เป้าที่ติด CC ดาเมจ x1.5'] } },
+  { id: 'leech', th: 'สายดูดเลือด', color: '#ff4a6a', icon: '🩸', minors: [{ leech: 0.5 }, { hpPct: 2 }, { hpRegen: 2 }],
+    notables: { A: ['Bloodthirst', { leech: 2 }], B: ['Undying', { hpPct: 10 }], L: ['Regrowth', { hpRegen: 15 }], R: ['Vital Spark', { hpPct: 6, leech: 1 }] },
+    keystones: { main: ['bloodmagic', 'Blood Magic', 'สกิลใช้ HP แทนทรัพยากร ดูดเลือด x1.5'], R: ['vampaura', 'Vampiric Aura', 'ฮีลเกินกลายเป็นโล่'] } },
+  { id: 'guard', th: 'สายป้องกัน', color: '#8ad0ff', icon: '🛡', minors: [{ armorPct: 3 }, { res: 2 }, { block: 1 }],
+    notables: { A: ['Fortress', { armorPct: 15 }], B: ['Warded', { res: 8 }], L: ['Shield Wall', { block: 6 }], R: ['Iron Will', { vit: 15, hpPct: 4 }] },
+    keystones: { main: ['juggernaut', 'Juggernaut', 'ไม่ถูกผลัก/ดึง และลดดาเมจที่ได้รับ 10%'] } },
 ];
+export const STAT_ICON = { atkPct: '⚔', atkSpd: '⚡', critDmg: '💥', crit: '🎯', dmgElAll: '🔥', statusPower: '☠', move: '👟', cdr: '⏱', leech: '🩸', hpPct: '❤', hpRegen: '✚', armorPct: '🛡', res: '🔰', block: '🧱', dmgAll: '✦', minionDmg: '👻', healPower: '💚', dmgMelee: '🗡', dmgRanged: '🏹', dmgDot: '🧪', mpRegen: '💧', area: '◎', shieldPower: '🔵', vit: '💪', dodge: '💨', dmgBoss: '👑' };
 
 const cache = {};
 export function buildPassiveTree(classId) {
   if (cache[classId]) return cache[classId];
   const cls = CLASS_BY_ID[classId];
-  const nodes = [{ id: 'root', branch: 'root', name: 'Origin', x: 0, y: 0, ranks: 1, stats: {}, req: [], free: true }];
-  const branches = [...BRANCHES, {
-    id: 'class', th: `สายคลาส ${cls?.th || ''}`, angle: 270 - 0, color: cls?.palette.accent || '#fff',
-    chains: [cls ? cls.passives.slice(0, 4).map((p) => [p.key, p.name, p.stats, p.ranks]) .concat([]) : [],
-      cls ? cls.passives.slice(4).map((p) => [p.key, p.name, p.stats || null, p.ranks || 1, { keystone: p.keystone, desc: p.desc }]) : []],
-  }];
-  const totalChains = branches.reduce((a, b) => a + b.chains.length, 0);
-  const per = (Math.PI * 2) / totalChains;
-  let angCursor = -Math.PI / 2 - (branches[0].chains.length * per) / 2;
-  branches.forEach((br) => {
-    const n = br.chains.length;
-    // trunk takes the middle slot of the branch's sector; side chains fill the rest
-    const slots = [...Array(n).keys()];
-    const mid = Math.floor(n / 2);
-    const order = [mid, ...slots.filter((i) => i !== mid)];
-    let trunkTail = 'root';
-    br.chains.forEach((chain, ci) => {
-      const ang = angCursor + (order[ci] + 0.5) * per;
-      const dir = [Math.cos(ang), Math.sin(ang)];
-      let prev = ci === 0 ? 'root' : trunkTail;
-      chain.forEach((nd, ni) => {
-        const [key, name, stats, ranks, opts = {}] = nd;
-        const dist = ci === 0 ? 95 + ni * 72 : 185 + ni * 66;
-        const id = `${br.id}.${key}`;
-        nodes.push({
-          id, branch: br.id, name, ranks: ranks || 1, stats: stats || {}, keystone: opts.keystone || null, cond: opts.cond || null,
-          desc: opts.desc || (stats ? Object.entries(stats).map(([k, v]) => `${k} +${v}${ranks > 1 ? '/ระดับ' : ''}`).join(', ') : ''),
-          x: Math.round(dir[0] * dist), y: Math.round(dir[1] * dist), req: [prev], color: br.color,
-        });
-        prev = id;
-        if (ci === 0 && ni === 0) trunkTail = id;
-      });
-    });
-    angCursor += n * per;
+  const nodes = [{ id: 'root', branch: 'root', name: 'Origin', x: 0, y: 0, ranks: 1, stats: {}, req: [], free: true, type: 'root' }];
+  const byId = { root: nodes[0] };
+  const branches = [...BRANCHES];
+  if (cls) {
+    const ps = cls.passives.filter((p) => !p.keystone), ks = cls.passives.filter((p) => p.keystone);
+    const tri = (st) => Object.fromEntries(Object.entries(st).map(([k, v]) => [k, Math.round(v * 3 * 10) / 10]));
+    branches.push({ id: 'class', th: `สายคลาส ${cls.th}`, color: cls.palette.accent, icon: '★', minors: [{ hpPct: 1 }, { dmgAll: 1.5 }],
+      notables: { A: [ps[0].name, tri(ps[0].stats)], B: [ps[1].name, tri(ps[1].stats)], L: [ps[2].name, tri(ps[2].stats)], R: [ps[3].name, tri(ps[3].stats)] },
+      keystones: { main: [ks[0].keystone, ks[0].name.replace(' (Keystone)', ''), ks[0].desc], R: [ks[1].keystone, ks[1].name.replace(' (Keystone)', ''), ks[1].desc] } });
+  }
+  const add = (n) => { nodes.push(n); byId[n.id] = n; return n; };
+  const link = (a, b) => { if (!byId[b].req.includes(a)) byId[b].req.push(a); if (!byId[a].req.includes(b) && a !== 'root') byId[a].req.push(b); };
+  const descOf = (st) => Object.entries(st).map(([k, v]) => `${k} +${v}`).join(', ');
+  const sector = (Math.PI * 2) / branches.length;
+  branches.forEach((br, bi) => {
+    const mid = -Math.PI / 2 + bi * sector;
+    const P = (r, a) => [Math.round(Math.cos(a) * r), Math.round(Math.sin(a) * r)];
+    let mi = 0;
+    const minor = (id, x, y, ring) => { const st = br.minors[mi++ % br.minors.length]; return add({ id: `${br.id}.${id}`, branch: br.id, name: 'Minor', type: 'minor', ranks: 1, stats: st, desc: descOf(st), x, y, req: [], color: br.color, icon: STAT_ICON[Object.keys(st)[0]] || '•', ring }); };
+    const notable = (key, x, y) => { const [name, st] = br.notables[key]; return add({ id: `${br.id}.n${key}`, branch: br.id, name, type: 'notable', ranks: 1, stats: st, desc: descOf(st), x, y, req: [], color: br.color, icon: STAT_ICON[Object.keys(st)[0]] || br.icon }); };
+    const keystone = (key, x, y) => { const k = br.keystones[key]; if (!k) return null; const [ks, name, desc, st] = k; return add({ id: `${br.id}.k${key}`, branch: br.id, name, type: 'keystone', keystone: ks.startsWith('__') ? null : ks, ranks: 1, stats: st || {}, desc: desc || descOf(st), x, y, req: [], color: br.color, icon: br.icon }); };
+    // ring cluster: n nodes on a circle around (cx,cy); returns ring node ids
+    const cluster = (tag, cR, cA, rr, n, notKey) => {
+      const [cx, cy] = P(cR, cA); const ids = [];
+      for (let i = 0; i < n; i++) { const a = cA + Math.PI + (i / n) * Math.PI * 2; const nd = minor(`${tag}${i}`, Math.round(cx + Math.cos(a) * rr), Math.round(cy + Math.sin(a) * rr), { cx, cy, r: rr }); ids.push(nd.id); }
+      for (let i = 0; i < n; i++) link(ids[i], ids[(i + 1) % n]);
+      const nt = notable(notKey, cx, cy); link(ids[Math.floor(n / 3)], nt.id); link(ids[Math.floor((2 * n) / 3)], nt.id);
+      return ids;
+    };
+    // trunk
+    let prev = 'root';
+    for (let i = 0; i < 3; i++) { const [x, y] = P(150 + i * 55, mid); const nd = minor(`t${i}`, x, y); link(prev, nd.id); prev = nd.id; }
+    const A = cluster('a', 380, mid, 72, 6, 'A'); link(prev, A[0]);
+    // outer path -> cluster B -> keystone
+    let p2 = A[3];
+    for (let i = 0; i < 2; i++) { const [x, y] = P(500 + i * 52, mid); const nd = minor(`p${i}`, x, y); link(p2, nd.id); p2 = nd.id; }
+    const B = cluster('b', 680, mid, 72, 6, 'B'); link(p2, B[0]);
+    const [kx, ky] = P(820, mid); const km = keystone('main', kx, ky); if (km) link(B[3], km.id);
+    // side clusters
+    for (const [side, sgn] of [['L', -1], ['R', 1]]) {
+      const a = mid + sgn * sector * 0.3;
+      const S2 = cluster(side.toLowerCase(), 560, a, 58, 5, side);
+      link(A[sgn < 0 ? 4 : 2], S2[0]);
+      const k = br.keystones[side]; if (k) { const [x, y] = P(690, a + sgn * sector * 0.05); const kn = keystone(side, x, y); link(S2[2], kn.id); }
+    }
   });
-  const tree = { classId, nodes, byId: Object.fromEntries(nodes.map((n) => [n.id, n])), branches: branches.map((b) => ({ id: b.id, th: b.th, color: b.color })) };
+  const tree = { classId, nodes, byId, branches: branches.map((b) => ({ id: b.id, th: b.th, color: b.color, icon: b.icon })) };
   cache[classId] = tree;
   return tree;
 }
