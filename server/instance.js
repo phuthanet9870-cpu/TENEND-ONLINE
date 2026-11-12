@@ -35,14 +35,14 @@ export class Instance {
     a.at = this.time + (a.delay || 0);
     a.until = a.dur ? a.at + a.dur : a.at;
     this.areas.push(a);
-    if (!a.noVis) this.fx({ k: 'area', x: a.x, y: a.y, shape: a.shape, r: a.r, r2: a.r2, ang: a.ang, arc: a.arc, len: a.len, w: a.w, el: a.spec?.el, delay: a.delay, dur: a.dur || 0, trap: a.trap ? 1 : 0, heal: a.healField || a.spec?.safety ? 1 : 0, follow: a.follow, show: a.show ? 1 : 0, melee: a.melee ? 1 : 0, v: a.spec?.v });
+    if (!a.noVis) this.fx({ k: 'area', x: a.x, y: a.y, shape: a.shape, r: a.r, r2: a.r2, ang: a.ang, arc: a.arc, len: a.len, w: a.w, el: a.spec?.el, delay: a.delay, dur: a.dur || 0, trap: a.trap ? 1 : 0, heal: a.healField || a.spec?.safety ? 1 : 0, follow: a.follow, show: a.show ? 1 : 0, melee: a.melee ? 1 : 0, v: a.spec?.v, s: a.spec?.n });
     return a;
   }
   projectile(o) {
     const p = { id: this.nextId(), hit: new Set(), dist: 0, ...o };
     p.vx = Math.cos(p.ang) * p.speed; p.vy = Math.sin(p.ang) * p.speed;
     this.projectiles.push(p);
-    this.fx({ k: 'proj', id: p.id, x: Math.round(p.x), y: Math.round(p.y), vx: Math.round(p.vx), vy: Math.round(p.vy), r: p.r, el: p.el || p.spec?.el, life: (p.range / p.speed) * (p.spec?.boomerang ? 2 : 1), h: p.homing ? 1 : 0, m: p.monster ? 1 : 0, v: p.spec?.v });
+    this.fx({ k: 'proj', id: p.id, x: Math.round(p.x), y: Math.round(p.y), vx: Math.round(p.vx), vy: Math.round(p.vy), r: p.r, el: p.el || p.spec?.el, life: (p.range / p.speed) * (p.spec?.boomerang ? 2 : 1), h: p.homing ? 1 : 0, m: p.monster ? 1 : 0, v: p.spec?.v, s: p.spec?.n });
     return p;
   }
   nearestEnemy(u, range, x = u.x, y = u.y, exclude) {
@@ -350,7 +350,7 @@ export class Instance {
       }
       if (alive) {
         keep.push(p);
-        if (p.dirty) { p.dirty = false; this.fx({ k: 'proj', id: p.id, x: Math.round(p.x), y: Math.round(p.y), vx: Math.round(p.vx), vy: Math.round(p.vy), r: p.r, el: p.el, life: (p.range - p.dist) / p.speed + (p.returning ? 0 : 0), upd: 1, m: p.monster ? 1 : 0, v: p.spec?.v }); }
+        if (p.dirty) { p.dirty = false; this.fx({ k: 'proj', id: p.id, x: Math.round(p.x), y: Math.round(p.y), vx: Math.round(p.vx), vy: Math.round(p.vy), r: p.r, el: p.el, life: (p.range - p.dist) / p.speed + (p.returning ? 0 : 0), upd: 1, m: p.monster ? 1 : 0, v: p.spec?.v, s: p.spec?.n }); }
       } else {
         this.fx({ k: 'pend', id: p.id, x: p.x, y: p.y });
         if (p.spec.detonate && owner) this.area({ owner: p.owner, team: p.team, x: p.x, y: p.y, shape: 'circle', r: p.spec.detonate, spec: p.spec, mult: p.mult * 0.5, delay: 0, show: true });

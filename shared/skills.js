@@ -196,6 +196,9 @@ export function generateClassSkills(cls) {
   return list;
 }
 for (const c of CLASSES) generateClassSkills(c);
+// stable numeric index per skill (sent with FX events so the client can draw each skill's own VFX recipe)
+export const SKILL_LIST = CLASSES.flatMap((c) => CLASS_SKILLS[c.id] || []);
+SKILL_LIST.forEach((d, i) => { d.n = i; d.base.n = i; });
 
 export const getSkill = (id) => ALL_SKILLS.get(id);
 export const classSkills = (classId) => CLASS_SKILLS[classId] || [];

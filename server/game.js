@@ -381,7 +381,7 @@ export class Game {
       u.treads = 0;
       inst.area({ owner: u.id, team: u.team, x: u.x, y: u.y, shape: 'circle', r: 180, spec: { ...spec, dmg: 250, el: 'lightning', behavior: 'nova', mech: 'shock' }, mult: 1, delay: 0.05, follow: u.id, show: true });
     }
-    if (spec.kind === 'ultimate') inst.fx({ k: 'ult', id: u.id, n: spec.name, el: spec.el }, u);
+    if (spec.kind === 'ultimate') inst.fx({ k: 'ult', id: u.id, n: spec.name, el: spec.el, s: spec.n }, u);
   }
   playerDodge(sess, m) {
     const u = sess.unit, inst = sess.inst;

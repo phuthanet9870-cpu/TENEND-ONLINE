@@ -45,13 +45,13 @@ export function execSig(inst, caster, spec, tx, ty, mult, opt) {
   // ---- sky bolts on one target (Lightning Bolt style) ----
   if (spec.skyBolt && spec.behavior === 'chain') {
     const t = targetNear(inst, caster, tx, ty, spec.range || 420); if (!t) return true;
-    for (let i = 0; i < (spec.multiHit || 1); i++) inst.timer(w + i * (spec.interval || 0.12), () => { if (t.dead) return; inst.fx({ k: 'bolt', x: t.x, y: t.y, el: spec.el }, t); dealDamage(inst, caster, t, spec, mult); });
+    for (let i = 0; i < (spec.multiHit || 1); i++) inst.timer(w + i * (spec.interval || 0.12), () => { if (t.dead) return; inst.fx({ k: 'bolt', x: t.x, y: t.y, el: spec.el, s: spec.n }, t); dealDamage(inst, caster, t, spec, mult); });
     return true;
   }
   // ---- single target curses via chain:0 (Stone Curse, Lex Aeterna) ----
   if (spec.behavior === 'chain' && spec.chain === 0) {
     const t = targetNear(inst, caster, tx, ty, spec.range || 420); if (!t) return true;
-    inst.timer(w, () => { inst.fx({ k: 'chain', pts: [[caster.x, caster.y - 8], [t.x, t.y - 8]], el: spec.el }, caster); inst.fx({ k: 'area', x: t.x, y: t.y, shape: 'circle', r: 40, el: spec.el, delay: 0, dur: 0, v: spec.v, show: 1 }); dealDamage(inst, caster, t, spec, mult); });
+    inst.timer(w, () => { inst.fx({ k: 'chain', pts: [[caster.x, caster.y - 8], [t.x, t.y - 8]], el: spec.el, s: spec.n }, caster); inst.fx({ k: 'area', x: t.x, y: t.y, shape: 'circle', r: 40, el: spec.el, s: spec.n, delay: 0, dur: 0, v: spec.v, show: 1 }); dealDamage(inst, caster, t, spec, mult); });
     return true;
   }
   // ---- teleport behind a target then strike (Backstab, Shadow Step) ----
@@ -62,7 +62,7 @@ export function execSig(inst, caster, spec, tx, ty, mult, opt) {
     teleport(inst, caster, t.x + Math.cos(a) * (t.r + 18), t.y + Math.sin(a) * (t.r + 18));
     caster.facing = a + Math.PI;
     if (spec.guaranteedCrit) caster.guaranteedCrit = true;
-    inst.timer(0.05, () => { inst.fx({ k: 'area', x: t.x, y: t.y, shape: 'circle', r: 50, el: spec.el, delay: 0, dur: 0, v: spec.v, show: 1 }); dealDamage(inst, caster, t, spec, mult, { melee: true }); });
+    inst.timer(0.05, () => { inst.fx({ k: 'area', x: t.x, y: t.y, shape: 'circle', r: 50, el: spec.el, s: spec.n, delay: 0, dur: 0, v: spec.v, show: 1 }); dealDamage(inst, caster, t, spec, mult, { melee: true }); });
     return true;
   }
   // ---- dash to a far target (Grapple Leap) ----
@@ -82,7 +82,7 @@ export function execSig(inst, caster, spec, tx, ty, mult, opt) {
       const t = inst.nearestEnemy(caster, n === 1 ? spec.range : 320, n === 1 ? tx : caster.x, n === 1 ? ty : caster.y, hit); if (!t) return;
       hit.add(t.id); const a = Math.atan2(t.y - caster.y, t.x - caster.x);
       teleport(inst, caster, t.x + Math.cos(a) * (t.r + 14), t.y + Math.sin(a) * (t.r + 14));
-      inst.fx({ k: 'area', x: t.x, y: t.y, shape: 'circle', r: 46, el: spec.el, delay: 0, dur: 0, v: 'xslash', show: 1 });
+      inst.fx({ k: 'area', x: t.x, y: t.y, shape: 'circle', r: 46, el: spec.el, s: spec.n, delay: 0, dur: 0, v: 'xslash', show: 1 });
       dealDamage(inst, caster, t, spec, mult, { melee: true }); caster.iframesUntil = inst.time + 0.2;
       inst.timer(0.16, step);
     };
@@ -109,11 +109,11 @@ export function execSig(inst, caster, spec, tx, ty, mult, opt) {
   // ---- random strikes over an area (Arrow Rain, Blizzard, Thunderstorm, Meteor Storm, Heaven's Drive) ----
   if (spec.rain) {
     const [cx, cy] = clampTo(caster, tx, ty, spec.range || 520);
-    inst.fx({ k: 'area', x: cx, y: cy, shape: 'circle', r: spec.radius, el: spec.el, delay: spec.rainDur || 1, dur: 0, v: 'runes', ghost: 1 });
+    inst.fx({ k: 'area', x: cx, y: cy, shape: 'circle', r: spec.radius, el: spec.el, s: spec.n, delay: spec.rainDur || 1, dur: 0, v: 'runes', ghost: 1 });
     for (let i = 0; i < spec.rain; i++) inst.timer(w + (i / spec.rain) * (spec.rainDur || 1), () => {
       const a = Math.random() * 6.283, r = spec.radius * Math.sqrt(Math.random());
       const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
-      if (spec.skyBolt) inst.fx({ k: 'bolt', x, y, el: spec.el });
+      if (spec.skyBolt) inst.fx({ k: 'bolt', x, y, el: spec.el, s: spec.n });
       inst.area({ owner: caster.id, team: caster.team, x, y, shape: 'circle', r: spec.rainR || 42, spec, mult, delay: spec.v === 'meteor' ? 0.35 : 0 });
     });
     return true;
@@ -132,7 +132,7 @@ export function execSig(inst, caster, spec, tx, ty, mult, opt) {
   // ---- total damage split between everyone hit (Napalm Beat) ----
   if (spec.splitDmg) {
     const [cx, cy] = clampTo(caster, tx, ty, spec.range || 520);
-    inst.fx({ k: 'area', x: cx, y: cy, shape: 'circle', r: spec.radius, el: spec.el, delay: spec.delay, dur: 0, v: spec.v, show: 1 });
+    inst.fx({ k: 'area', x: cx, y: cy, shape: 'circle', r: spec.radius, el: spec.el, s: spec.n, delay: spec.delay, dur: 0, v: spec.v, show: 1 });
     inst.timer(w + (spec.delay || 0), () => { const v = inst.hostilesIn(caster.team, { shape: 'circle', x: cx, y: cy, r: spec.radius }); const m = (mult * (1 + 0.3 * (v.length - 1))) / Math.max(1, v.length); for (const t of v) dealDamage(inst, caster, t, spec, m, { cx, cy }); });
     return true;
   }

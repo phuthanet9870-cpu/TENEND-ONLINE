@@ -1,5 +1,6 @@
 // ===== UI v2: icon-driven panels (no text dropdowns), RO-style inventory, PoE-style passive tree, illustrated world map =====
 import { CLASS_BY_ID } from '/shared/classes.js';
+import { recipeOf, describeFx } from './skillfx.js';
 import { classSkills, getSkill, resolveSkill, MAX_SKILL_RANK, runeSlotsForRank, FAMILIES, classDisciplines, TRAITS, MOD_TH } from '/shared/skills.js';
 import { RUNES, RUNE_BY_ID, runeFits } from '/shared/runes.js';
 import { buildPassiveTree, passivePointsFor, spentPoints } from '/shared/passives.js';
@@ -98,7 +99,7 @@ export function installUI2(UI) {
       const owned = RUNES.filter((r) => (c.runes[r.id] || 0) > 0 && runeFits(r, sel.behavior));
       const stats = [['📈', 'Rank', `${rank}/${MAX_SKILL_RANK}`], ['💥', 'ดาเมจ', spec.dmg ? Math.round(spec.dmg) + '%' : '-'], ['⏱', 'คูลดาวน์', spec.cd.toFixed(1) + 'วิ'], ['💧', cls.resource.name, Math.round(spec.cost)], spec.radius ? ['◎', 'รัศมี', Math.round(spec.radius)] : null, spec.range ? ['📏', 'ระยะ', Math.round(spec.range)] : null, spec.multiHit > 1 ? ['✖', 'จำนวนครั้ง', spec.multiHit] : null, spec.count > 1 ? ['🔢', 'จำนวน', spec.count] : null, spec.chain ? ['🔗', 'กระโดด', spec.chain] : null, spec.heal ? ['❤', 'ฮีล', Math.round(spec.heal) + '%'] : null].filter(Boolean);
       detail = `<div class="sk-head">${this.skIcon(sel, 1)}<div><h3>${esc(sel.name)}</h3><div class="tags"><span class="tag2">${sel.kind === 'ultimate' ? '🌟 ULTIMATE' : (tabs.find((t) => t[0] === sel.school) || ['', '', ''])[1] + ' ' + (tabs.find((t) => t[0] === sel.school) || ['', '', ''])[2]}</span><span class="tag2" style="color:${ELEMENT_INFO[spec.el].color}">● ${ELEMENT_INFO[spec.el].th}</span><span class="tag2">🔓 Lv ${sel.unlock}</span></div></div></div>
-        <p class="sk-desc">${esc(sel.desc)}</p>${(sel.mods || []).length ? `<div class="tags">${sel.mods.map((m) => `<span class="tag2">✦ ${esc(MOD_TH[m] || m)}</span>`).join('')}</div>` : ''}
+        <p class="sk-desc">${esc(sel.desc)}</p><div class="fx-line"><span>✨ ${esc(describeFx(recipeOf(sel.n)))}</span><button class="mini" data-act="fxPreview" data-n="${sel.n}">▶ ดูเอฟเฟกต์</button></div>${(sel.mods || []).length ? `<div class="tags">${sel.mods.map((m) => `<span class="tag2">✦ ${esc(MOD_TH[m] || m)}</span>`).join('')}</div>` : ''}
         <p class="dim">⭐ ลักษณะเฉพาะคลาส: <b>${esc(trait.name)}</b> — ${esc(trait.th)}</p>
         <div class="stat-tiles">${stats.map(([i, a, b]) => `<div><i>${i}</i><span>${a}</span><b>${b}</b></div>`).join('')}</div>
         ${locked ? `<p class="err">🔒 ต้องการเลเวล ${sel.unlock}</p>` : `${sel.kind === 'ultimate' ? `<div class="row"><button data-act="equipSkill" data-slot="u" data-id="${sel.id}">${c.build.ult === sel.id ? '✔ ใส่อยู่ช่อง R' : '⬇ ใส่ช่องอัลติเมท [R]'}</button>` : `<h4>⬇ ใส่ลง Hotbar <small class="dim">คลิกช่อง • หรือลากจากรายการ</small></h4>
@@ -424,6 +425,7 @@ export function installUI2(UI) {
       case 'stackUse': return S({ t: 'potion', kind: d.k.split(':')[1] });
       case 'stackRune': return this.openPanel('runes');
       case 'stack': return;
+      case 'fxPreview': this.r?.previewSkill(+d.n); return;
       case 'skFam': this.ctx.skFam = d.f; this.ctx.runeSlot = null; return this.renderPanel('skills');
       case 'selSkill': this.selSkill = d.id; this.ctx.runeSlot = null; return this.renderPanel('skills');
       case 'runeSlot': if (e.target.closest('button')) break; this.ctx.runeSlot = this.ctx.runeSlot === +d.i ? null : +d.i; return this.renderPanel('skills');

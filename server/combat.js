@@ -127,7 +127,7 @@ export function dealDamage(inst, src, tgt, spec, mult = 1, opt = {}) {
   }
   src.lastCombat = tgt.lastCombat = inst.time;
   const dealt = applyRaw(inst, tgt, dmg, src);
-  inst.fx({ k: 'dmg', id: tgt.id, v: dmg, c: crit ? 1 : 0, el }, tgt);
+  inst.fx({ k: 'dmg', id: tgt.id, v: dmg, c: crit ? 1 : 0, el, s: opt.dot ? undefined : spec?.n }, tgt);
   // threat & contribution
   tgt.threat = tgt.threat || new Map();
   tgt.threat.set(owner.id, (tgt.threat.get(owner.id) || 0) + dmg);
@@ -256,7 +256,7 @@ export function castSkill(inst, caster, spec, tx, ty, opt = {}) {
   const mult = opt.mult || 1;
   const ang = Math.atan2(ty - caster.y, tx - caster.x);
   caster.facing = ang;
-  if (!opt.silent) inst.fx({ k: 'cast', id: caster.id, ang, beh: spec.behavior, el: spec.el, n: opt.echo ? null : spec.name }, caster);
+  if (!opt.silent) inst.fx({ k: 'cast', id: caster.id, ang, beh: spec.behavior, el: spec.el, s: spec.n, n: opt.echo ? null : spec.name }, caster);
   const clampTarget = (range) => {
     const d = Math.hypot(tx - caster.x, ty - caster.y);
     if (d <= range) return [tx, ty];
@@ -314,7 +314,7 @@ export function castSkill(inst, caster, spec, tx, ty, opt = {}) {
       const [gx, gy] = clampTarget(spec.range || 500);
       if (b === 'leap') {
         caster.iframesUntil = inst.time + spec.delay + 0.1;
-        inst.fx({ k: 'dash', id: caster.id, x1: caster.x, y1: caster.y, x2: gx, y2: gy, el: spec.el, leap: 1, dur: spec.delay }, caster);
+        inst.fx({ k: 'dash', id: caster.id, x1: caster.x, y1: caster.y, x2: gx, y2: gy, el: spec.el, s: spec.n, leap: 1, dur: spec.delay }, caster);
         const ok = canStand(inst.L, gx, gy, caster.r * 0.6);
         inst.timer(spec.delay, () => { if (ok && !caster.dead) { caster.x = gx; caster.y = gy; } });
         if (caster.stats.ks?.has('unstoppable')) caster.ccImmuneUntil = inst.time + 2;
@@ -335,7 +335,7 @@ export function castSkill(inst, caster, spec, tx, ty, opt = {}) {
         inst.timer(delayW, () => {
           if (caster.dead) return;
           const len = spec.range;
-          inst.fx({ k: 'beam', x1: caster.x, y1: caster.y - 8, x2: caster.x + Math.cos(a2) * len, y2: caster.y - 8 + Math.sin(a2) * len, el: spec.el, w: spec.width }, caster);
+          inst.fx({ k: 'beam', x1: caster.x, y1: caster.y - 8, x2: caster.x + Math.cos(a2) * len, y2: caster.y - 8 + Math.sin(a2) * len, el: spec.el, s: spec.n, w: spec.width }, caster);
           inst.area({ owner: caster.id, team: caster.team, x: caster.x, y: caster.y, shape: 'line', len, w: spec.width, ang: a2, spec, mult, delay: 0, chain: spec.chain, noVis: true });
           if (spec.linger) inst.area({ owner: caster.id, team: caster.team, x: caster.x, y: caster.y, shape: 'line', len, w: spec.width, ang: a2, spec, mult: mult * 0.2, delay: 0, dur: spec.linger, tick: 0.5 });
           if (spec.detonate) inst.area({ owner: caster.id, team: caster.team, x: caster.x + Math.cos(a2) * len, y: caster.y + Math.sin(a2) * len, shape: 'circle', r: spec.detonate, spec, mult: mult * 0.6, delay: 0.1 });
@@ -355,7 +355,7 @@ export function castSkill(inst, caster, spec, tx, ty, opt = {}) {
       caster.momentumUntil = inst.time + 3;
       if (caster.stats.ks?.has('unstoppable')) caster.ccImmuneUntil = inst.time + 2;
       if (caster.stats.leg?.has('set_shadowdancer')) caster.guaranteedCrit = true;
-      inst.fx({ k: 'dash', id: caster.id, x1: x0, y1: y0, x2: x, y2: y, el: spec.el, dur: 0.15 }, caster);
+      inst.fx({ k: 'dash', id: caster.id, x1: x0, y1: y0, x2: x, y2: y, el: spec.el, s: spec.n, dur: 0.15 }, caster);
       caster.x = x; caster.y = y;
       const len = Math.hypot(x - x0, y - y0);
       inst.area({ owner: caster.id, team: caster.team, x: x0, y: y0, shape: 'line', len: Math.max(30, len), w: spec.width, ang, spec, mult, delay: 0.05, chain: spec.chain, noVis: true });
@@ -368,7 +368,7 @@ export function castSkill(inst, caster, spec, tx, ty, opt = {}) {
       inst.timer(delayW, () => {
         if (caster.dead) return;
         const first = inst.nearestEnemy(caster, spec.range, tx, ty) || inst.nearestEnemy(caster, spec.range);
-        if (!first) { inst.fx({ k: 'chain', pts: [[caster.x, caster.y - 8], [caster.x + Math.cos(ang) * 120, caster.y + Math.sin(ang) * 120]], el: spec.el }, caster); return; }
+        if (!first) { inst.fx({ k: 'chain', pts: [[caster.x, caster.y - 8], [caster.x + Math.cos(ang) * 120, caster.y + Math.sin(ang) * 120]], el: spec.el, s: spec.n }, caster); return; }
         doChain(inst, caster, first, spec, mult, spec.chain + (caster.stats.chainBonus || 0), [caster.x, caster.y - 8]);
       });
       break;
@@ -389,7 +389,7 @@ export function castSkill(inst, caster, spec, tx, ty, opt = {}) {
       for (const t of new Set(targets)) {
         addStatus(inst, t, 'buff', spec.duration, { stats: spec.buff });
         if (spec.cleanse) cleanse(t);
-        inst.fx({ k: 'buff', id: t.id, el: spec.el, dur: spec.duration }, t);
+        inst.fx({ k: 'buff', id: t.id, el: spec.el, s: spec.n, dur: spec.duration }, t);
       }
       if (spec.castNova) inst.area({ owner: caster.id, team: caster.team, x: caster.x, y: caster.y, shape: 'circle', r: 150, spec: { ...spec, dmg: spec.castNova, behavior: 'nova' }, mult, delay: 0.1, show: true });
       if (spec.mech === 'rage') caster.mp = Math.min(caster.mpMax, caster.mp + caster.mpMax * 0.35);
@@ -437,7 +437,7 @@ export function doChain(inst, caster, first, spec, mult, bounces, fromPt) {
     m *= 0.9;
     cur = inst.nearestEnemy(caster, 240, cur.x, cur.y, hit);
   }
-  inst.fx({ k: 'chain', pts, el: spec.el }, caster);
+  inst.fx({ k: 'chain', pts, el: spec.el, s: spec.n }, caster);
 }
 
 function placeTrap(inst, caster, spec, x, y, mult) {
@@ -450,7 +450,7 @@ function placeTrap(inst, caster, spec, x, y, mult) {
 function addOrbit(inst, caster, spec, mult) {
   const o = { id: inst.nextId(), owner: caster.id, team: caster.team, count: spec.count, r: spec.radius, spec, mult, until: inst.time + spec.duration, tick: spec.tick || 0.35, next: 0, hitT: new Map(), el: spec.el };
   inst.orbits.push(o);
-  inst.fx({ k: 'orbit', id: o.id, owner: caster.id, n: o.count, r: o.r, dur: spec.duration, el: spec.el }, caster);
+  inst.fx({ k: 'orbit', id: o.id, owner: caster.id, n: o.count, r: o.r, dur: spec.duration, el: spec.el, s: spec.n }, caster);
 }
 
 const MINION_KINDS = {
