@@ -11,7 +11,7 @@ export function glow(color, r) {
   x.fillStyle = g; x.fillRect(0, 0, r * 2, r * 2); glowCache.set(key, c); return c;
 }
 const hex = (h) => { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
-function ramp(cols, t) { const f = Math.min(cols.length - 1.001, t * (cols.length - 1)); const i = Math.floor(f), k = f - i; const a = hex(cols[i]), b = hex(cols[i + 1]); return `rgb(${a[0] + (b[0] - a[0]) * k | 0},${a[1] + (b[1] - a[1]) * k | 0},${a[2] + (b[2] - a[2]) * k | 0})`; }
+export function ramp(cols, t) { const f = Math.min(cols.length - 1.001, t * (cols.length - 1)); const i = Math.floor(f), k = f - i; const a = hex(cols[i]), b = hex(cols[i + 1]); return `rgb(${a[0] + (b[0] - a[0]) * k | 0},${a[1] + (b[1] - a[1]) * k | 0},${a[2] + (b[2] - a[2]) * k | 0})`; }
 
 export const PAL = {
   fire: ['#fffbe0', '#ffe066', '#ffa030', '#ff5a1a', '#b82010', '#401010'],
@@ -164,6 +164,7 @@ export class FX {
         case 'runering': { const r = p.r0 + (p.r1 - p.r0) * Math.min(1, u * 2); ctx.lineWidth = 2; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.ellipse(x, y, r, r * 0.5, p.t * 2, 0, TAU); ctx.stroke(); ctx.setLineDash([]); ctx.beginPath(); ctx.ellipse(x, y, r * 0.7, r * 0.35, -p.t * 3, 0, TAU); ctx.stroke(); for (let i = 0; i < 6; i++) { const a = p.t * 2 + (i / 6) * TAU; ctx.fillRect(x + Math.cos(a) * r - 2, y + Math.sin(a) * r * 0.5 - 2, 4, 4); } break; }
         case 'bmp': { const spr = glyphSprite(p.key, p.c1, p.c2); const sc = Math.max(1, Math.round(size)); if (p.glow) { ctx.globalCompositeOperation = 'lighter'; const ga = ctx.globalAlpha; ctx.globalAlpha = ga * 0.55; const r = Math.round(spr.width * sc * 0.9); ctx.drawImage(glow(p.glow, 32), x - r, y - r, r * 2, r * 2); ctx.globalAlpha = ga; ctx.globalCompositeOperation = 'source-over'; } ctx.save(); ctx.translate(x, y); if (p.rot) ctx.rotate(p.rot); if (p.flip) ctx.scale(-1, 1); ctx.drawImage(spr, Math.round(-spr.width * sc / 2), Math.round(-spr.height * sc / 2), spr.width * sc, spr.height * sc); ctx.restore(); break; }
         case 'glyph': drawGlyphCircle(ctx, x, y, p, u); break;
+        case 'fn': p.draw(ctx, x, y, u, p, w2s); break;
         case 'slash': { const r = p.r * (0.7 + u * 0.4), a0 = p.ang - p.arc / 2 + (p.dir || 1) * u * 0.4, a1 = p.ang + p.arc / 2 + (p.dir || 1) * u * 0.4; ctx.globalCompositeOperation = 'lighter'; for (let k = 0; k < 3; k++) { const w = (p.w || 10) * (1 - u) * (1 - k * 0.3); ctx.lineWidth = Math.max(1, w); ctx.strokeStyle = k === 2 ? '#ffffff' : ramp(p.pal, Math.min(1, u + k * 0.2)); ctx.beginPath(); ctx.ellipse(x, y, r - k * 3, (r - k * 3) * 0.55, 0, a0, a1); ctx.stroke(); } break; }
         case 'reticle': { const r = p.r * (1.6 - Math.min(1, u * 3) * 0.6); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.stroke(); for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2 + p.t * 2; ctx.fillRect(x + Math.cos(a) * r - 2, y + Math.sin(a) * r - 2, 4, 4); } ctx.fillRect(x - r * 0.4, y, r * 0.8, 1.5); ctx.fillRect(x, y - r * 0.4, 1.5, r * 0.8); break; }
         case 'beam': { const w = p.w * (u < 0.2 ? u / 0.2 : 1 - (u - 0.2) * 0.8); const g = ctx.createLinearGradient(x - w, 0, x + w, 0); g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.5, p.pal[1]); g.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = g; ctx.fillRect(x - w, y - p.h, w * 2, p.h); ctx.fillStyle = '#ffffff'; ctx.fillRect(x - w * 0.15, y - p.h, w * 0.3, p.h); break; }
@@ -195,6 +196,7 @@ function boltPath(x1, y1, x2, y2, depth) {
 }
 
 // hexagonal force-field dome around a unit (shield status)
+export { drawGlyphCircle };
 export function drawDome(ctx, x, y, r, t, color = '#7ad8ff') {
   ctx.save(); ctx.globalCompositeOperation = 'lighter';
   ctx.beginPath(); ctx.ellipse(x, y, r, r * 1.05, 0, Math.PI, 0); ctx.lineTo(x + r, y); ctx.ellipse(x, y, r, r * 0.3, 0, 0, Math.PI); ctx.closePath(); ctx.save(); ctx.clip();

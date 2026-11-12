@@ -4,6 +4,7 @@ import { MAPS } from '/shared/world.js';
 import { drawProjectile, drawImpact, drawField } from './vfx.js';
 import { FX, drawDome, drawIcePrism } from './fx2.js';
 import { recipeOf, SFX } from './skillfx.js';
+import { MOVES } from './moves.js';
 import { charSprite, weaponSprite, monsterSprite, groundTile, plazaTile, obstacleSprite, wallTile, borderTile, shade, drawEmblem } from './sprites.js';
 
 const BIT = Object.fromEntries(STATUS_BITS.map((s, i) => [s, 1 << i]));
@@ -71,7 +72,7 @@ export class Renderer {
         Object.assign(p, { x: e.x, y: e.y, vx: e.vx, vy: e.vy, r: e.r, el: e.el, until: now + e.life + 0.05, m: e.m, v: e.v || p.v, s: e.s ?? p.s });
         this.projs.set(e.id, p); break;
       }
-      case 'pend': { const p = this.projs.get(e.id); if (p) { const rc = recipeOf(p.s); if (rc) SFX.hit(this.fxp, rc, p.x, p.y, 0); this.fxp.sparks(p.x, p.y, p.el, 8, 120); if (p.el === 'fire') this.fxp.smoke(p.x, p.y, 2, 8, 20, 0.8); this.fxp.light(p.x, p.y, 40, glowOf(p.el), 0.15); this.projs.delete(e.id); } break; }
+      case 'pend': { const p = this.projs.get(e.id); if (p) { const rc = recipeOf(p.s); if (rc) MOVES.impact(this.fxp, rc, p.s, { x: p.x, y: p.y + 12, r: Math.max(34, (p.r || 6) * 5), ang: Math.atan2(p.vy, p.vx), shape: 'circle', minor: 1 }); this.fxp.sparks(p.x, p.y, p.el, 8, 120); if (p.el === 'fire') this.fxp.smoke(p.x, p.y, 2, 8, 20, 0.8); this.fxp.light(p.x, p.y, 40, glowOf(p.el), 0.15); this.projs.delete(e.id); } break; }
       case 'dmg': {
         const u = G.units.get(e.id); if (!u) break;
         if (e.miss) this.text(u.x, u.y - 30, 'MISS', '#aaaaaa', 12);
@@ -79,7 +80,7 @@ export class Renderer {
         else {
           const mine = e.id === G.you; const col = mine ? '#ff5a5a' : e.c ? '#ffe14a' : elc(e.el) === '#e0d6c8' ? '#ffffff' : elc(e.el);
           this.text(u.x + (Math.random() - 0.5) * 20, u.y - 30, (e.c ? '★' : '') + fmt(e.v), col, e.c ? 18 : 13);
-          this.flash.set(e.id, now + 0.1); this.fxp.sparks(u.x, u.y - 14, e.el, e.c ? 12 : 5, e.c ? 220 : 130); { const rc = recipeOf(e.s); if (rc) SFX.hit(this.fxp, rc, u.x, u.y - 14, e.c); }
+          this.flash.set(e.id, now + 0.1); this.fxp.sparks(u.x, u.y - 14, e.el, e.c ? 12 : 5, e.c ? 220 : 130); { const rc = recipeOf(e.s); if (rc) MOVES.hit(this.fxp, rc, e.s, u.x, u.y - 14, e.c); }
           if (mine) this.shake = Math.min(6, this.shake + 2);
         }
         break;
@@ -89,16 +90,16 @@ export class Renderer {
       case 'area': this.fx.push({ ...e, t0: now }); if (e.s != null && e.delay > 0.15 && !e.trap) { const rc = recipeOf(e.s); if (rc) this.fxp.add({ x: e.x, y: e.y, vx: 0, vy: 0, shape: 'glyph', life: e.delay + 0.1, r: e.r || 60, pal: rc.pal, sides: rc.sides, step: rc.step, rings: rc.rings, spin: rc.spin, ticks: rc.ticks, inner: rc.inner, alpha: 0.7 }); } if (e.boss) this.shake = Math.min(10, this.shake + 4); break;
       case 'tele': this.fx.push({ ...e, kind: 'tele', t0: now }); break;
       case 'teleCancel': this.fx = this.fx.filter((f) => !(f.kind === 'tele' && f.tid === e.id)); break;
-      case 'beam': this.fx.push({ ...e, kind: 'beam', t0: now }); { const rc = recipeOf(e.s); if (rc) SFX.beam(this.fxp, rc, e.x1, e.y1, e.x2, e.y2); } this.fxp.sparks(e.x2, e.y2, e.el, 14, 200); this.fxp.light(e.x2, e.y2, 70, glowOf(e.el), 0.25); this.fxp.light(e.x1, e.y1, 50, glowOf(e.el), 0.2); break;
+      case 'beam': this.fx.push({ ...e, kind: 'beam', t0: now }); { const rc = recipeOf(e.s); if (rc) MOVES.beam(this.fxp, rc, e.s, e.x1, e.y1, e.x2, e.y2, e.w); } this.fxp.sparks(e.x2, e.y2, e.el, 14, 200); this.fxp.light(e.x2, e.y2, 70, glowOf(e.el), 0.25); this.fxp.light(e.x1, e.y1, 50, glowOf(e.el), 0.2); break;
       case 'chain': for (let i = 1; i < e.pts.length; i++) { const rc = recipeOf(e.s); this.fxp.bolt(e.pts[i - 1][0], e.pts[i - 1][1], e.pts[i][0], e.pts[i][1], rc ? rc.pal[2] : glowOf(e.el), 0.3, 2.5, 1); if (rc) SFX.hit(this.fxp, rc, e.pts[i][0], e.pts[i][1], 0); this.fxp.sparks(e.pts[i][0], e.pts[i][1], e.el, 6, 140); } break;
       case 'bolt': this.fxp.strike(e.x, e.y, e.el || 'lightning'); break;
-      case 'dash': this.fx.push({ ...e, kind: 'dash', t0: now }); { const rc = recipeOf(e.s); if (rc) SFX.dash(this.fxp, rc, e.x1, e.y1, e.x2, e.y2); } for (let i = 0; i < 10; i++) { const k = i / 10; this.fxp.trail(e.x1 + (e.x2 - e.x1) * k, e.y1 - 14 + (e.y2 - e.y1) * k, e.x2 - e.x1, e.y2 - e.y1, e.el); } if (e.blink) { this.fxp.arcaneBurst(e.x1, e.y1, 30); this.fxp.arcaneBurst(e.x2, e.y2, 30); } { const u = G.units.get(e.id); if (u && e.dur) { u.anim = { x1: e.x1, y1: e.y1, x2: e.x2, y2: e.y2, t0: now, dur: e.dur, leap: e.leap }; } } break;
-      case 'cast': { this.swing.set(e.id, { t0: now, ang: e.ang, beh: e.beh }); const u = G.units.get(e.id); { const rc = recipeOf(e.s); if (rc && u) SFX.cast(this.fxp, rc, u.x, u.y, e.ang || 0); } if (u && e.n && e.id !== G.you && u.meta?.k !== 'monster') this.text(u.x, u.y - 52, e.n, '#c8e8ff', 10, 0.8); break; }
+      case 'dash': this.fx.push({ ...e, kind: 'dash', t0: now }); { const rc = recipeOf(e.s); if (rc) MOVES.dash(this.fxp, rc, e.s, e.x1, e.y1, e.x2, e.y2); } for (let i = 0; i < 10; i++) { const k = i / 10; this.fxp.trail(e.x1 + (e.x2 - e.x1) * k, e.y1 - 14 + (e.y2 - e.y1) * k, e.x2 - e.x1, e.y2 - e.y1, e.el); } if (e.blink) { this.fxp.arcaneBurst(e.x1, e.y1, 30); this.fxp.arcaneBurst(e.x2, e.y2, 30); } { const u = G.units.get(e.id); if (u && e.dur) { u.anim = { x1: e.x1, y1: e.y1, x2: e.x2, y2: e.y2, t0: now, dur: e.dur, leap: e.leap }; } } break;
+      case 'cast': { this.swing.set(e.id, { t0: now, ang: e.ang, beh: e.beh }); const u = G.units.get(e.id); { const rc = recipeOf(e.s); if (rc && u) MOVES.cast(this.fxp, rc, e.s, u.x, u.y, e.ang || 0); } if (u && e.n && e.id !== G.you && u.meta?.k !== 'monster') this.text(u.x, u.y - 52, e.n, '#c8e8ff', 10, 0.8); break; }
       case 'ult': { const u = G.units.get(e.id); if (u) { this.text(u.x, u.y - 70, e.n, elc(e.el), 18, 1.8); this.fx.push({ kind: 'ring', x: u.x, y: u.y, el: e.el, t0: now, r: 200 }); this.fxp.pillar(u.x, u.y, e.el || 'holy', 220, 34); { const rc = recipeOf(e.s); if (rc) SFX.ult(this.fxp, rc, u.x, u.y); } this.fxp.light(u.x, u.y, 260, glowOf(e.el), 0.6); this.shake = 8; } break; }
       case 'matk': this.swing.set(e.id, { t0: now, ang: e.ang, beh: 'melee', wind: e.wind }); break;
       case 'orbit': this.orbits.set(e.id, { owner: e.owner, n: e.n, r: e.r, until: now + e.dur, el: e.el }); break;
       case 'orbitEnd': this.orbits.delete(e.id); break;
-      case 'buff': this.fx.push({ kind: 'ring', x: 0, y: 0, follow: e.id, el: e.el, t0: now, r: 50 }); { const rc = recipeOf(e.s), u = G.units.get(e.id); if (rc && u) SFX.buff(this.fxp, rc, u.x, u.y); } { const u = G.units.get(e.id); if (u && e.v) this.fx.push({ k: 'area', x: u.x, y: u.y, follow: e.id, shape: 'circle', r: 46, el: e.el, delay: 0, dur: 0, v: e.v === 'parry' || e.v === 'steel' ? 'runes' : e.v === 'rage' ? 'explosion' : e.v === 'wind' ? 'rings' : e.v === 'note' ? 'heal' : e.v === 'enchant' ? 'sparkle' : e.v, t0: now }); } break;
+      case 'buff': this.fx.push({ kind: 'ring', x: 0, y: 0, follow: e.id, el: e.el, t0: now, r: 50 }); { const rc = recipeOf(e.s), u = G.units.get(e.id); if (rc && u) MOVES.buff(this.fxp, rc, e.s, u.x, u.y); } { const u = G.units.get(e.id); if (u && e.v) this.fx.push({ k: 'area', x: u.x, y: u.y, follow: e.id, shape: 'circle', r: 46, el: e.el, delay: 0, dur: 0, v: e.v === 'parry' || e.v === 'steel' ? 'runes' : e.v === 'rage' ? 'explosion' : e.v === 'wind' ? 'rings' : e.v === 'note' ? 'heal' : e.v === 'enchant' ? 'sparkle' : e.v, t0: now }); } break;
       case 'hop': { const u = G.units.get(e.id); if (u) u.anim = { x1: u.x, y1: u.y, x2: u.x, y2: u.y, t0: now, dur: Math.min(1, e.dur), leap: 1 }; break; }
       case 'lvl': { const u = G.units.get(e.id); if (u) { this.fxp.respawn(u.x, u.y); this.fx.push({ kind: 'ring', follow: e.id, el: 'holy', t0: now, r: 90 }); this.text(u.x, u.y - 70, 'LEVEL UP!', '#7fe8ff', 18, 2); } break; }
       case 'counter': this.fx.push({ kind: 'ring', follow: e.id, el: 'lightning', t0: now, r: 40, fast: 1 }); break;
@@ -110,14 +111,16 @@ export class Renderer {
   // play a skill's VFX on the local player (skill window preview)
   previewSkill(n) {
     const rc = recipeOf(n), me = this.g.units.get(this.g.you); if (!rc || !me) return;
-    const a = me.facing || 0, F = this.fxp, tx = me.x + Math.cos(a) * 170, ty = me.y + Math.sin(a) * 110;
-    SFX.cast(F, rc, me.x, me.y, a);
-    if (rc.ult) { SFX.ult(F, rc, me.x, me.y); setTimeout(() => SFX.impact(F, rc, tx, ty, 160, a), 450); return; }
-    if (rc.beh === 'buff' || rc.beh === 'heal' || rc.beh === 'summon' || rc.beh === 'totem' || rc.beh === 'orbit') { setTimeout(() => SFX.buff(F, rc, me.x, me.y), 120); if (rc.beh !== 'buff') setTimeout(() => SFX.impact(F, rc, tx, ty, 80, a), 300); return; }
-    if (rc.beh === 'projectile' || rc.beh === 'barrage' || rc.beh === 'chain') { const id = -1e6 - Math.floor(Math.random() * 1e5); this.projs.set(id, { trail: [], x: me.x, y: me.y - 14, vx: Math.cos(a) * 520, vy: Math.sin(a) * 340, r: 6, el: rc.el, until: this.t + 0.33, s: n }); setTimeout(() => SFX.impact(F, rc, tx, ty, 70, a), 330); return; }
-    if (rc.beh === 'dash') SFX.dash(F, rc, me.x, me.y, tx, ty);
-    if (rc.beh === 'beam') SFX.beam(F, rc, me.x, me.y - 12, tx, ty);
-    setTimeout(() => SFX.impact(F, rc, rc.beh === 'melee' || rc.beh === 'nova' ? me.x + Math.cos(a) * 40 : tx, rc.beh === 'melee' || rc.beh === 'nova' ? me.y + Math.sin(a) * 26 : ty, rc.beh === 'nova' ? 120 : 80, a), 180);
+    const a = me.facing || 0, F = this.fxp, beh = rc.beh, near = ['melee', 'nova'].includes(beh);
+    const tx = near ? me.x + Math.cos(a) * 10 : me.x + Math.cos(a) * 180, ty = near ? me.y + Math.sin(a) * 6 : me.y + Math.sin(a) * 110;
+    MOVES.cast(F, rc, n, me.x, me.y, a);
+    if (rc.ult) SFX.ult(F, rc, me.x, me.y);
+    const area = { x: tx, y: ty, r: beh === 'melee' ? 70 : beh === 'nova' ? 130 : 90, ang: a, shape: beh === 'beam' ? 'line' : 'circle', len: 220 };
+    if (['buff', 'heal', 'summon', 'totem', 'orbit'].includes(beh)) { setTimeout(() => MOVES.buff(F, rc, n, me.x, me.y), 150); if (beh !== 'buff') setTimeout(() => MOVES.impact(F, rc, n, { ...area, r: 80 }), 350); return; }
+    if (beh === 'projectile' || beh === 'barrage' || beh === 'chain') { const id = -1e6 - Math.floor(Math.random() * 1e5); this.projs.set(id, { trail: [], x: me.x, y: me.y - 14, vx: Math.cos(a) * 520, vy: Math.sin(a) * 340, r: 6, el: rc.el, until: this.t + 0.33, s: n }); setTimeout(() => MOVES.impact(F, rc, n, area), 330); return; }
+    if (beh === 'dash' || beh === 'leap') MOVES.dash(F, rc, n, me.x, me.y, tx, ty);
+    if (beh === 'beam') { MOVES.beam(F, rc, n, me.x, me.y - 12, me.x + Math.cos(a) * 240, me.y - 12 + Math.sin(a) * 150, 24); return; }
+    setTimeout(() => MOVES.impact(F, rc, n, area), near ? 60 : 200);
   }
   text(x, y, s, c, size = 13, life = 1) { this.texts.push({ x, y, s, c, size, t0: this.t, life }); if (this.texts.length > 150) this.texts.shift(); }
   burst(x, y, c, n) { for (let i = 0; i < n; i++) { const a = Math.random() * 6.28, sp = 40 + Math.random() * 120; this.parts.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 40, c, t0: this.t, life: 0.3 + Math.random() * 0.4 }); } if (this.parts.length > 600) this.parts.splice(0, this.parts.length - 600); }
@@ -146,6 +149,7 @@ export class Renderer {
       ctx.fillStyle = 'rgba(255,255,255,0.18)'; const o = ((this.t * 12 + d) % 32) | 0; ctx.fillRect(X - x0 + o % 28, Y - y0 + ((d >> 3) % 24), 6, 2);
     }
     // ground FX (areas, telegraphs, traps, objectives)
+    this.fxp.drawDecals(ctx, dt, (wx, wy) => this.w2s(wx, wy));
     this.drawObjectives(ctx);
     this.drawGroundFx(ctx, dt);
     this.drawNavAndTarget(ctx);
@@ -192,6 +196,7 @@ export class Renderer {
     // vignette
     const grd = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.max(W, H) * 0.75);
     grd.addColorStop(0, 'rgba(0,0,0,0)'); grd.addColorStop(1, 'rgba(0,0,0,0.45)'); ctx.fillStyle = grd; ctx.fillRect(0, 0, W, H);
+    this.fxp.drawScreen(ctx, dt, W, H); { const sk = this.fxp.takeShake(); if (sk) this.shake = Math.min(14, Math.max(this.shake, sk)); }
     if (me && me.dead) { ctx.fillStyle = 'rgba(60,0,0,0.35)'; ctx.fillRect(0, 0, W, H); }
   }
 
@@ -295,7 +300,7 @@ export class Renderer {
       ctx.strokeStyle = c; ctx.globalAlpha = 0.5; ctx.lineWidth = Math.max(2, p.r * 0.8); ctx.beginPath();
       p.trail.forEach(([tx, ty], i) => { const [sx, sy] = this.w2s(tx, ty); i ? ctx.lineTo(sx, sy) : ctx.moveTo(sx, sy); }); ctx.stroke(); ctx.globalAlpha = 1;
       const [x, y] = this.w2s(p.x, p.y);
-      if (rc) { SFX.drawProj(ctx, rc, x, y, p, this.t); continue; }
+      if (rc) { MOVES.drawProj(ctx, rc, p.s, x, y, p, this.t); continue; }
       if (!p.m && drawProjectile(ctx, p, x, y, c, g, this.t)) continue;
       const rr = Math.max(3, p.r);
       ctx.fillStyle = p.m ? '#ff5a3a' : c; ctx.fillRect(x - rr, y - rr, rr * 2, rr * 2);
@@ -350,7 +355,7 @@ export class Renderer {
       }
       const a = age - (f.delay || 0);
       if (f.dur) { // lingering field
-        this.fxp.field(f.x, f.y, f.r || f.len || 60, f.heal ? 'holy' : f.el, f.v, dt0); { const rc = recipeOf(f.s); if (rc) SFX.field(this.fxp, rc, f.x, f.y, f.r || f.len || 60, dt0); }
+        this.fxp.field(f.x, f.y, f.r || f.len || 60, f.heal ? 'holy' : f.el, f.v, dt0); { const rc = recipeOf(f.s); if (rc) { if (!f.started) { f.started = 1; MOVES.fieldStart(this.fxp, rc, f.s, f); } MOVES.field(this.fxp, rc, f.s, f, dt0); SFX.field(this.fxp, rc, f.x, f.y, (f.r || f.len || 60) * 0.5, dt0 * 0.4); } }
         const tint = drawField(ctx, f, x, y, this.t, col, elg(f.el));
         ctx.globalAlpha = 0.18 + Math.sin(this.t * 6) * 0.06; ctx.fillStyle = tint || col; this.shapePath(ctx, f, x, y); ctx.fill('evenodd');
         ctx.globalAlpha = 0.5; ctx.strokeStyle = col; ctx.lineWidth = 1; this.shapePath(ctx, f, x, y); ctx.stroke(); ctx.globalAlpha = 1;
@@ -369,7 +374,7 @@ export class Renderer {
   }
   impactFx(f) {
     const r = f.r || 60, el = f.heal ? 'holy' : (f.el || 'physical'), v = f.v || '', F = this.fxp, x = f.x, y = f.y;
-    { const rc = recipeOf(f.s); if (rc) { const L = f.shape === 'line' || f.shape === 'cone'; SFX.impact(F, rc, L ? x + Math.cos(f.ang || 0) * (f.len || r) * 0.5 : x, L ? y + Math.sin(f.ang || 0) * (f.len || r) * 0.5 : y, f.shape === 'line' ? Math.max(50, (f.len || r) * 0.45) : r, f.ang || 0); } }
+    { const rc = recipeOf(f.s); if (rc) { MOVES.impact(F, rc, f.s, f); return; } }
     if (f.melee || ['slash', 'crescent', 'xslash', 'combo', 'rend', 'flurry', 'thrust'].includes(v)) { const a = f.ang || 0; for (let i = 0; i < 6; i++) F.sparks(x + Math.cos(a) * r * 0.6, y + Math.sin(a) * r * 0.6 - 10, el, 2, 160); if (el === 'fire') F.flame(x + Math.cos(a) * r * 0.5, y + Math.sin(a) * r * 0.5, 8, r * 0.5); else if (el !== 'physical') F.light(x + Math.cos(a) * r * 0.5, y + Math.sin(a) * r * 0.5, r, glowOf(el), 0.2); return; }
     if (['explosion', 'bomb', 'meteor', 'asura'].includes(v)) return F.explosion(x, y, r, el === 'physical' ? 'fire' : el);
     if (v === 'pillar') return F.pillar(x, y, el === 'physical' ? 'holy' : el, 150, r * 0.6);

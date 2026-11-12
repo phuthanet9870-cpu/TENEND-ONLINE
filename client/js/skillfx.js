@@ -104,7 +104,7 @@ export function describeFx(rc) {
 }
 
 // ---------- emit helpers ----------
-function partOf(F, rc, kind, x, y, vx, vy, life, extra = {}) {
+export function partOf(F, rc, kind, x, y, vx, vy, life, extra = {}) {
   const pal = rc.pal;
   switch (kind) {
     case 'slash': F.add({ x, y, vx: 0, vy: 0, shape: 'slash', r: 18 + R() * 16, ang: Math.atan2(vy, vx), arc: 1.6, w: 6, pal, life: life * 0.6, dir: R() < 0.5 ? -1 : 1, ...extra }); return;
@@ -120,14 +120,14 @@ function partOf(F, rc, kind, x, y, vx, vy, life, extra = {}) {
   const brass = kind === 'p_shell';
   F.add({ x, y, vx, vy, life, shape: 'bmp', key: kind, c1: brass ? '#d8a030' : pal[2], c2: brass ? '#fff0a0' : pal[1], size: 2, rot: R() * TAU, vr: (R() - 0.5) * 10, drag: 0.93, g: brass ? 520 : 60, add: false, floor: brass ? y + 14 : undefined, ...extra });
 }
-function emblem(F, rc, x, y, scale, life = 0.8, rise = 40, extra = {}) {
+export function emblem(F, rc, x, y, scale, life = 0.8, rise = 40, extra = {}) {
   F.add({ x, y, vx: 0, vy: -rise, drag: 0.94, life, shape: 'bmp', key: rc.emb, c1: rc.pal[2], c2: rc.pal[1], size: scale, size2: scale + 1, glow: rc.glowC, add: false, ...extra });
 }
-function glyphCircle(F, rc, x, y, r, life = 0.7, extra = {}) {
+export function glyphCircle(F, rc, x, y, r, life = 0.7, extra = {}) {
   F.add({ x, y, vx: 0, vy: 0, shape: 'glyph', life, r, pal: rc.pal, sides: rc.sides, step: rc.step, rings: rc.rings, spin: rc.spin, ticks: rc.ticks, inner: rc.inner, rot0: R() * TAU, w: rc.ult ? 3 : 2, ...extra });
 }
 
-function burst(F, rc, x, y, r, ang = 0) {
+export function burst(F, rc, x, y, r, ang = 0) {
   const n = Math.round(rc.count * Math.min(1.8, 0.6 + r / 110) * rc.size), P = rc.pattern, K = [rc.part, rc.part2];
   const pk = (i) => K[i % 3 === 2 ? 1 : 0];
   switch (P) {
@@ -154,7 +154,7 @@ function burst(F, rc, x, y, r, ang = 0) {
     case 'helix': for (let i = 0; i < n; i++) { const k = i / n; partOf(F, rc, pk(i), x, y, 0, 0, 1.1, { orb: { cx: x, cy: y, a0: (i % 2) * Math.PI + k * 6, spin: rc.spin * 2.5, r0: r * 0.45, r1: r * 0.3, lift: 90 + k * 60 } }); } break;
   }
 }
-const MOD_FX = {
+export const MOD_FX = {
   freeze: (F, rc, x, y, r) => { for (let i = 0; i < 10; i++) { const a = (i / 10) * TAU; F.add({ x: x + Math.cos(a) * r * 0.5, y: y + Math.sin(a) * r * 0.25, vx: 0, vy: 0, life: 0.9, pal: PAL.ice, shape: 'shard', size: 5, size2: 3, rot: a, vr: 0, add: false, g: 0 }); } F.light(x, y, r, '#9adfff', 0.4); },
   chill: (F, rc, x, y, r) => { for (let i = 0; i < 12; i++) F.add({ x: x + (R() - 0.5) * r, y: y - 50 - R() * 40, vx: -10, vy: 50, life: 0.9, pal: ['#ffffff', '#c8f0ff'], shape: 'plus', size: 2, drag: 1 }); },
   burn: (F, rc, x, y, r) => { F.embers(x, y, 10, r); F.flame(x, y, 6, r * 0.6, 70, 2, 0.5); },
@@ -195,8 +195,8 @@ const MOD_FX = {
 
 // ---------- public VFX entry points ----------
 export const SFX = {
-  cast(F, rc, x, y, ang) {
-    glyphCircle(F, rc, x, y + 2, rc.ult ? 90 : 34, rc.ult ? 1.1 : 0.55);
+  cast(F, rc, x, y, ang, noCircle) {
+    if (!noCircle) glyphCircle(F, rc, x, y + 2, rc.ult ? 90 : 34, rc.ult ? 1.1 : 0.55);
     const fx = x + Math.cos(ang) * 22, fy = y - 18 + Math.sin(ang) * 12;
     switch (rc.M.cast) {
       case 'warcry': F.dust(x, y, 26); partOf(F, rc, 'slash', fx, fy, Math.cos(ang), Math.sin(ang), 0.4, { r: 26, w: 7 }); break;
